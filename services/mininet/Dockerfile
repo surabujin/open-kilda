@@ -15,6 +15,9 @@
 
 FROM kilda/base-ubuntu
 
+ENV LC_ALL C.UTF-8
+ENV LANG C.UTF-8
+
 ENV DEBIAN_FRONTEND noninteractive
 ENV MININET_REPO https://github.com/mininet/mininet.git
 ENV MININET_INSTALLER mininet/util/install.sh
@@ -39,6 +42,10 @@ RUN cp /usr/bin/ovs-testcontroller /usr/bin/controller
 RUN rm -rf /var/lib/apt/lists/*
 RUN ln -s /usr/sbin/tcpdump /usr/bin/tcpdump
 RUN pip install python-logstash requests
+
+# added by ../llgen/Makefile
+ADD py-deps /py-deps
+RUN pip3 install /py-deps/kilda_llgen-0.1-py3-none-any.whl
 
 ADD app /app
 RUN chmod a+rx /app/entry-point.sh

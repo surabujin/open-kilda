@@ -1,4 +1,4 @@
-package org.openkilda.controller;
+package org.openkilda.atdd.utils.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;

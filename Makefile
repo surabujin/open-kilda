@@ -61,6 +61,7 @@ compile:
 	$(MAKE) -C services/src
 	$(MAKE) -C services/wfm all-in-one
 	$(MAKE) -C services/mininet
+	$(MAKE) -C services/llgen
 
 unit:
 	$(MAKE) -C services/src
