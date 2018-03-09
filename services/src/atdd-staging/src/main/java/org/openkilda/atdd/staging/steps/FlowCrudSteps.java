@@ -4,6 +4,7 @@ import static com.nitorcreations.Matchers.reflectEquals;
 import static java.lang.String.format;
 import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasProperty;
 import static org.hamcrest.Matchers.is;
@@ -39,6 +40,7 @@ import org.openkilda.messaging.info.event.PathInfoData;
 import org.openkilda.messaging.info.event.SwitchInfoData;
 import org.openkilda.messaging.model.Flow;
 import org.openkilda.messaging.model.ImmutablePair;
+import org.openkilda.messaging.model.NetworkEndpoint;
 import org.openkilda.messaging.payload.flow.FlowEndpointPayload;
 import org.openkilda.messaging.payload.flow.FlowIdStatusPayload;
 import org.openkilda.messaging.payload.flow.FlowPayload;
@@ -47,10 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class FlowCrudSteps implements En {
@@ -73,6 +72,9 @@ public class FlowCrudSteps implements En {
 
     @Autowired
     private TopologyDefinition topologyDefinition;
+
+    @Autowired
+    private TraffExamService traffExam;
 
     @VisibleForTesting
     List<FlowPayload> flows = emptyList();
@@ -225,8 +227,8 @@ public class FlowCrudSteps implements En {
                         flow.getMaximumBandwidth(),
                         flow.isIgnoreBandwidth(), 0,
                         flow.getId(), null,
-                        flow.getSource().getSwitchId(),
-                        flow.getDestination().getSwitchId(),
+                        flow.getSource().getSwitchDpId(),
+                        flow.getDestination().getSwitchDpId(),
                         flow.getSource().getPortId(),
                         flow.getDestination().getPortId(),
                         flow.getSource().getVlanId(),
@@ -275,7 +277,52 @@ public class FlowCrudSteps implements En {
 
     @And("^each flow has traffic going with bandwidth not less than (\\d+)$")
     public void eachFlowHasTrafficGoingWithBandwidthNotLessThan(int bandwidth) {
-        //TODO: implement the check
+        Set<NetworkEndpoint> traffExamEndpoints = new HashSet<>();
+        Map<NetworkEndpoint, TopologyDefinition.Trafgen> endpointToTrafgen = new HashMap<>();
+
+        for (TopologyDefinition.Trafgen trafgen : topologyDefinition.getActiveTrafgens()) {
+            NetworkEndpoint endpoint = new NetworkEndpoint(
+                    trafgen.getSwitchConnected().getDpId(), trafgen.getSwitchPort());
+            traffExamEndpoints.add(endpoint);
+            endpointToTrafgen.put(endpoint, trafgen);
+        }
+
+        List<Exam> examsInProgress = new LinkedList<>();
+
+        for (FlowPayload flow : flows) {
+            NetworkEndpoint source = new NetworkEndpoint(flow.getSource());
+            if (!traffExamEndpoints.contains(source)) {
+                continue;
+            }
+            NetworkEndpoint dest = new NetworkEndpoint(flow.getDestination());
+            if (!traffExamEndpoints.contains(dest)) {
+                continue;
+            }
+
+            Host sourceHost = traffExam.hostByName(endpointToTrafgen.get(source).getName());
+            Host destHost = traffExam.hostByName(endpointToTrafgen.get(dest).getName());
+
+            List<Exam> trafficFlows = new ArrayList<>(2);
+            trafficFlows.add(new Exam(sourceHost, destHost)
+                    .withSourceVlan(new Vlan(flow.getSource().getVlanId()))
+                    .withDestVlan(new Vlan(flow.getDestination().getVlanId()))
+                    .withBandwidthLimit(new Bandwidth(flow.getMaximumBandwidth())));
+            trafficFlows.add(new Exam(destHost, sourceHost)
+                    .withSourceVlan(new Vlan(flow.getDestination().getVlanId()))
+                    .withDestVlan(new Vlan(flow.getSource().getVlanId()))
+                    .withBandwidthLimit(new Bandwidth(flow.getMaximumBandwidth())));
+
+            for (Exam exam : trafficFlows) {
+                try {
+                    examsInProgress.add(traffExam.startExam(exam));
+                } catch (OperationalException e) {
+                    LOGGER.warn("Unable to setup traffic exam for flow {} - {}", flow.getId(), e);
+                }
+            }
+        }
+
+        // TODO
+        List<ExamReport> reports = traffExam.waitExam(examsInProgress);
     }
 
     @Then("^each flow can be updated with (\\d+) max bandwidth$")

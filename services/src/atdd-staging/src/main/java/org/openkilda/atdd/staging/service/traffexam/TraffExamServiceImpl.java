@@ -38,14 +38,8 @@ import java.net.Inet4Address;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.InputMismatchException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import javax.naming.directory.InvalidAttributesException;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class TraffExamServiceImpl implements TraffExamService, DisposableBean {
@@ -98,11 +92,9 @@ public class TraffExamServiceImpl implements TraffExamService, DisposableBean {
     }
 
     @Override
-    public Host hostByName(String name)
-            throws InvalidAttributesException, NoResultsFoundException {
+    public Host hostByName(String name) throws NoResultsFoundException {
         if (name == null) {
-            throw new InvalidAttributesException(
-                    "Attribute \"name\" must not be null");
+            throw new IllegalArgumentException("Argument \"name\" must not be null");
         }
 
         Host target = null;
@@ -140,14 +132,16 @@ public class TraffExamServiceImpl implements TraffExamService, DisposableBean {
         ExamResources resources = null;
         List<HostResource> supplied = new ArrayList<>(4);
         try {
-            Address sourceAddress = assignAddress(
-                    exam.getSource(), new Address(
-                            subnet.address(1), subnet.getPrefix()));
+            Address sourceAddress = new Address(
+                    subnet.address(1), subnet.getPrefix());
+            sourceAddress.setVlan(exam.getSourceVlan());
+            assignAddress(exam.getSource(), sourceAddress);
             supplied.add(sourceAddress);
 
-            Address destAddress = assignAddress(
-                    exam.getDest(), new Address(
-                            subnet.address(2), subnet.getPrefix()));
+            Address destAddress = new Address(
+                    subnet.address(2), subnet.getPrefix());
+            destAddress.setVlan(exam.getDestVlan());
+            assignAddress(exam.getDest(), destAddress);
             supplied.add(destAddress);
 
             ConsumerEndpoint consumer = (ConsumerEndpoint) assignEndpoint(
@@ -185,6 +179,33 @@ public class TraffExamServiceImpl implements TraffExamService, DisposableBean {
 
         exam.setResources(resources);
         return exam;
+    }
+
+    @Override
+    public ExamReport waitExam(Exam exam) {
+        return this.waitExam(Collections.singletonList(exam).get(0));
+    }
+
+    @Override
+    public List<ExamReport> waitExam(List<Exam> exams) {
+        List<ExamReport> results = new ArrayList<>(exams.size());
+
+        for (Exam current : exams) {
+            // current backend implementation do not allow infinite
+            // execution, so we can have infinite loop here
+            while (true) try {
+                try {
+                    results.add(fetchReport(current));
+                    break;
+                } catch (ExamNotFinishedException e) {
+                    TimeUnit.SECONDS.sleep(1);
+                }
+            } catch (InterruptedException e) {
+                // ignore interrupt exceptions
+            }
+        }
+
+        return results;
     }
 
     @Override

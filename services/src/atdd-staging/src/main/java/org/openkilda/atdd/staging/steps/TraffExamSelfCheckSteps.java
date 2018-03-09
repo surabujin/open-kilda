@@ -30,7 +30,7 @@ public class TraffExamSelfCheckSteps implements En {
         Host destHost = traffExam.hostByName("tg2");
 
         Exam exam = new Exam(sourceHost, destHost)
-                .withVlan(new Vlan(20))
+                .withSourceVlan(new Vlan(20))
 //                .withBandwidthLimit(new Bandwidth(128))
                 .withBandwidthLimit(new Bandwidth(512))
                 .withTimeLimitSeconds(new TimeLimit(5));
