@@ -5,7 +5,6 @@ import org.openkilda.atdd.staging.service.traffexam.model.ExamReport;
 import org.openkilda.atdd.staging.service.traffexam.model.Host;
 
 import java.util.List;
-import javax.naming.directory.InvalidAttributesException;
 
 public interface TraffExamService {
     List<Host> listHosts();
@@ -14,9 +13,9 @@ public interface TraffExamService {
     Exam startExam(Exam exam)
             throws NoResultsFoundException, OperationalException;
 
-    ExamReport waitExam(Exam exam);
-
     List<ExamReport> waitExam(List<Exam> exams);
+
+    List<ExamReport> waitExam(List<Exam> exams, boolean cleanup);
 
     ExamReport fetchReport(Exam exam) throws NoResultsFoundException, ExamNotFinishedException;
 

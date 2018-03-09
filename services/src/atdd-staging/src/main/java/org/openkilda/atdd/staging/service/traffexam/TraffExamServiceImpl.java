@@ -181,13 +181,12 @@ public class TraffExamServiceImpl implements TraffExamService, DisposableBean {
         return exam;
     }
 
-    @Override
-    public ExamReport waitExam(Exam exam) {
-        return this.waitExam(Collections.singletonList(exam).get(0));
+    public List<ExamReport> waitExam(List<Exam> exams) {
+        return this.waitExam(exams, true);
     }
 
     @Override
-    public List<ExamReport> waitExam(List<Exam> exams) {
+    public List<ExamReport> waitExam(List<Exam> exams, boolean cleanup) {
         List<ExamReport> results = new ArrayList<>(exams.size());
 
         for (Exam current : exams) {
@@ -203,6 +202,10 @@ public class TraffExamServiceImpl implements TraffExamService, DisposableBean {
             } catch (InterruptedException e) {
                 // ignore interrupt exceptions
             }
+
+            if (cleanup) {
+                stopExam(current);
+            }
         }
 
         return results;
@@ -213,7 +216,7 @@ public class TraffExamServiceImpl implements TraffExamService, DisposableBean {
         ExamResources resources = retrieveExamResources(exam);
 
         return new ExamReport(
-                fetchEndpointReport(resources.getProducer()),
+                exam, fetchEndpointReport(resources.getProducer()),
                 fetchEndpointReport(resources.getConsumer()));
     }
 
