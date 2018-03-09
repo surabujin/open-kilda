@@ -17,15 +17,21 @@ package org.openkilda.atdd.staging.config;
 
 import static org.mockito.Mockito.mock;
 
+import org.openkilda.atdd.staging.model.topology.TopologyDefinition;
 import org.openkilda.atdd.staging.service.floodlight.FloodlightService;
 import org.openkilda.atdd.staging.service.northbound.NorthboundService;
 import org.openkilda.atdd.staging.service.topology.TopologyEngineService;
+import org.openkilda.atdd.staging.service.traffexam.TraffExamService;
+import org.openkilda.atdd.staging.service.traffexam.TraffExamServiceImpl;
+
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
 @Configuration
 @Profile("mock")
+@ComponentScan(basePackages = {"org.openkilda.atdd.staging.service"})
 public class MockedServiceConfig {
 
     @Bean
@@ -42,4 +48,7 @@ public class MockedServiceConfig {
     public TopologyEngineService topologyEngineService() {
         return mock(TopologyEngineService.class);
     }
+
+    @Bean
+    public TraffExamService traffExamService(TopologyDefinition topology) { return new TraffExamServiceImpl(topology); }
 }
