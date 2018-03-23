@@ -1,0 +1,62 @@
+@startuml
+title Switch connect
+
+participant OFSwitch as SW
+participant FloodLight as FL
+control kilda.speaker
+control kilda.topo.eng
+participant TE
+control kilda.topo.disco
+
+SW -> FL: OF negotiate
+note right of FL: add SW into pending set
+note right of FL
+  make SwitchReadyInfo(
+    make SwitchOFRulesDump <- collect existing OFRules
+    fill reply to with "kilda.speaker"
+  )
+end note
+FL -> kilda.topo.eng: SwitchReadyInfo
+kilda.topo.eng -> TE: SwitchReadyInfo
+
+note right of TE: make SwitchSetupInfo
+note right of TE: SwitchSetupInfo <- set "activate" flag
+
+alt rule sync enabled
+    note right of TE
+      sync flows using data from neo4j
+      * collect flows for SW
+      * SwitchSetupInfo <- fill extra flows list (cookies)
+      * SwitchSetupInfo <- fill install commands for missing flows
+    end note
+end
+
+TE -> kilda.speaker: SwitchSetupInfo
+kilda.speaker -> FL: SwitchSetupInfo
+
+loop cookie in extra_rules_list
+  FL -> SW: drop OFRule(cookie)
+end
+loop installCommand in missing_flows
+  FL -> SW: install OFRule(makeOFRuleByInstallCommand)
+end
+
+opt is "activate" flag set
+  note right of FL: make SwitchInfoData
+  FL -> kilda.topo.disco: SwitchInfoData
+
+  loop port in swith_ports
+    note right of FL: make PortInfoData
+    FL -> kilda.topo.disco
+  end
+
+  note right of kilda.topo.disco: Existing process that\nhandle discovery events
+end
+
+opt reply to is set
+  note right of FL: read data from reply to
+  note right of FL: make SwitchSetupReply
+  FL -> kilda.topo.eng: SwitchSetupReply
+end
+
+@enduml

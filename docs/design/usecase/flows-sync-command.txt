@@ -1,0 +1,86 @@
+@startuml
+Title Flows sync command
+
+participant Client
+participant NB
+participant OFSwitch as SW
+participant FloodLight as FL
+control kilda.speaker
+control kilda.topo.eng
+participant TE
+control kilda.topo.disco
+
+Client -> NB: PUT /switch/datapathId/flows-sync {}
+note right of NB
+  make SwitchFlowsSyncCommand
+  fill switch dbatapathId
+  fill reply to with "kilda.northbound"
+end note
+NB -> kilda.topo.eng: SwitchFlowsSyncCommand
+kilda.topo.eng -> TE: SwitchFlowsSyncCommand
+
+alt rule sync enabled
+  note right of TE
+    make SwitchDumpRulesCommand
+    fill datapathId
+    fill reply to with "kilda.topo.eng"
+  end note
+  TE -> kilda.speaker: SwitchDumpRulesCommand
+
+  kilda.speaker -> FL: SwitchDumpRulesCommand
+  note right of FL
+    make SwitchStateInfo(
+      make SwitchOFRulesDump <- collect existing OFRules
+    )
+  end note
+  note right of FL: read and use "reply-to"
+  FL -> kilda.topo.eng: SwitchStateInfo
+
+  kilda.topo.eng -> TE: SwitchStateInfo
+  note right of TE
+    sync flows using data from neo4j
+    collect flows for SW
+    make SwitchSetupInfo(
+      fill reply to with "kilda.topo.eng"
+    )
+    * SwitchSetupInfo <- fill extra flows list (cookies)
+    * SwitchSetupInfo <- fill install commands for missing flows
+  end note
+
+  TE -> kilda.speaker: SwitchSetupInfo
+  kilda.speaker -> FL: SwitchSetupInfo
+
+  loop cookie in extra_rules_list
+    FL -> SW: drop OFRule(cookie)
+  end
+  loop installCommand in missing_flows
+    FL -> SW: install OFRule(makeOFRuleByInstallCommand)
+  end
+
+  opt reply to is set
+    note right of FL: read data from reply to
+    note right of FL: make SwitchSetupReply
+    FL -> kilda.topo.eng: SwitchSetupReply
+  end
+
+  kilda.topo.eng -> TE: SwitchSetupReply
+  note right of TE
+     ???
+     it must sent reply into kilda.northbound,
+     but we don't keep this anywhere
+  end note
+  TE -> kilda.northbound: SwitchFlowsSyncReply
+
+else rule sync disabled
+  note right of TE
+    make SwitchFlowsSyncReply(
+      set feature disabled
+    )
+  end note
+  TE -> kilda.northbound: SwitchFlowsSyncReply
+end
+
+kilda.northbound -> NB: SwitchFlowsSyncReply
+NB -> Client: HTTP200(SwitchFlowsSyncReply)
+
+@enduml
