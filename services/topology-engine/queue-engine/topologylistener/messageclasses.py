@@ -465,7 +465,9 @@ class MessageItem(object):
 
         self.log.debug('Flow %s request processing', operation)
 
-        with db.LockAdapter.wrap_lock(neo4j_update_lock), graph.begin() as tx:
+        with db.LockAdapter.wrap(neo4j_update_lock), graph.begin() as tx:
+            self.log.debug(
+                    'Flow %s request processing - behind lock', operation)
             try:
                 if operation == "CREATE" or operation == "PUSH":
                     propagate = operation == "CREATE"

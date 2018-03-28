@@ -32,7 +32,7 @@ def create_p2n_driver():
 
 class LockAdapter(object):
     @classmethod
-    def wrap_lock(cls, lock):
+    def wrap(cls, lock):
         timeout = config.getint('neo4j', 'lock_timeout')
         return cls(lock, timeout)
 
