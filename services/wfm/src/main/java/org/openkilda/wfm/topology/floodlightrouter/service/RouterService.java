@@ -51,7 +51,8 @@ public class RouterService {
             AliveRequest request = new AliveRequest();
             CommandMessage message = new CommandMessage(request, System.currentTimeMillis(), UUID.randomUUID()
                     .toString());
-            routerMessageSender.send(message, Stream.formatWithRegion(Stream.SPEAKER_DISCO, region), false);
+            routerMessageSender.send(message.getCorrelationId(), message,
+                                     Stream.formatWithRegion(Stream.SPEAKER_DISCO, region));
 
         }
         floodlightTracker.checkTimeouts();
@@ -69,7 +70,7 @@ public class RouterService {
             InfoMessage infoMessage = (InfoMessage) message;
             InfoData infoData = infoMessage.getData();
             SwitchId switchId = null;
-            String region = ((InfoMessage) message).getRegion();
+            String region = infoMessage.getRegion();
             handleResponseFromSpeaker(routerMessageSender, region, message.getTimestamp());
             if (infoData instanceof AliveResponse) {
                 AliveResponse aliveResponse = (AliveResponse) infoData;
@@ -87,14 +88,11 @@ public class RouterService {
 
             // NOTE(tdurakov): need to notify of a mapping update
             if (switchId != null && region != null && floodlightTracker.updateSwitchRegion(switchId, region)) {
-                routerMessageSender.send(new SwitchMapping(switchId, region), Stream.REGION_NOTIFICATION);
+                routerMessageSender.sendRegionNotification(new SwitchMapping(switchId, region));
             }
         }
-        routerMessageSender.send(message, Stream.KILDA_TOPO_DISCO, true);
+        routerMessageSender.send(message, Stream.KILDA_TOPO_DISCO);
     }
-
-
-
 
     /**
      * Process request to speaker disco.
@@ -109,7 +107,7 @@ public class RouterService {
                 log.error("Received command message for the untracked switch: {} {}", switchId, message);
             } else {
                 String stream = Stream.formatWithRegion(Stream.SPEAKER_DISCO, region);
-                routerMessageSender.send(message, stream, false);
+                routerMessageSender.send(message, stream);
             }
         } else {
             log.warn("Received message without target switch from SPEAKER_DISCO stream: {}", message);
@@ -140,7 +138,7 @@ public class RouterService {
         log.info(
                 "Send network dump request (correlation-id: {})",
                 correlationId);
-        routerMessageSender.send(command, Stream.formatWithRegion(Stream.SPEAKER_DISCO, region), false);
+        routerMessageSender.send(correlationId, command, Stream.formatWithRegion(Stream.SPEAKER_DISCO, region));
         return correlationId;
     }
 }

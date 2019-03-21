@@ -27,6 +27,7 @@ import org.openkilda.wfm.topology.floodlightrouter.Stream;
 import org.openkilda.wfm.topology.floodlightrouter.service.FloodlightTracker;
 import org.openkilda.wfm.topology.floodlightrouter.service.MessageSender;
 import org.openkilda.wfm.topology.floodlightrouter.service.RouterService;
+import org.openkilda.wfm.topology.floodlightrouter.service.SwitchMapping;
 import org.openkilda.wfm.topology.utils.AbstractTickStatefulBolt;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -92,7 +93,7 @@ public class DiscoveryBolt extends AbstractTickStatefulBolt<InMemoryKeyValueStat
         currentTuple = input;
         Message message = null;
         try {
-            String json = input.getValueByField(AbstractTopology.MESSAGE_FIELD).toString();
+            String json = input.getStringByField(AbstractTopology.MESSAGE_FIELD);
             message = MAPPER.readValue(json, Message.class);
             switch (sourceComponent) {
                 case ComponentType.KILDA_TOPO_DISCO_KAFKA_SPOUT:
@@ -125,14 +126,12 @@ public class DiscoveryBolt extends AbstractTickStatefulBolt<InMemoryKeyValueStat
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
+        Fields kafkaFields = new Fields(AbstractTopology.KEY_FIELD, AbstractTopology.MESSAGE_FIELD);
         for (String region : floodlights) {
-            outputFieldsDeclarer.declareStream(Stream.formatWithRegion(Stream.SPEAKER_DISCO, region),
-                    new Fields(AbstractTopology.MESSAGE_FIELD));
-            outputFieldsDeclarer.declareStream(Stream.formatWithRegion(Stream.SPEAKER, region),
-                    new Fields(AbstractTopology.MESSAGE_FIELD));
+            outputFieldsDeclarer.declareStream(Stream.formatWithRegion(Stream.SPEAKER_DISCO, region), kafkaFields);
+            outputFieldsDeclarer.declareStream(Stream.formatWithRegion(Stream.SPEAKER, region), kafkaFields);
         }
-        outputFieldsDeclarer.declareStream(Stream.KILDA_TOPO_DISCO,
-                new Fields(AbstractTopology.KEY_FIELD, AbstractTopology.MESSAGE_FIELD));
+        outputFieldsDeclarer.declareStream(Stream.KILDA_TOPO_DISCO, kafkaFields);
         outputFieldsDeclarer.declareStream(Stream.REGION_NOTIFICATION, new Fields(AbstractTopology.MESSAGE_FIELD));
     }
 
@@ -143,22 +142,15 @@ public class DiscoveryBolt extends AbstractTickStatefulBolt<InMemoryKeyValueStat
         super.prepare(map, topologyContext, outputCollector);
     }
 
+    // MessageSender implementation
 
     @Override
-    public void send(Message message, String outputStream, boolean lookupKey) {
-        try {
-            String json = MAPPER.writeValueAsString(message);
-            Values values;
-            if (lookupKey && currentTuple.getFields().contains(AbstractTopology.KEY_FIELD)
-                    && currentTuple.getValueByField(AbstractTopology.KEY_FIELD) != null) {
-                values = new Values(currentTuple.getStringByField(AbstractTopology.KEY_FIELD), json);
-            } else {
-                values = new Values(json);
-            }
-            outputCollector.emit(outputStream, currentTuple, values);
-        } catch (JsonProcessingException e) {
-            logger.error("failed to serialize message {}", message);
+    public void send(Message message, String outputStream) {
+        String key = null;
+        if (currentTuple.getFields().contains(AbstractTopology.KEY_FIELD)) {
+            key = currentTuple.getStringByField(AbstractTopology.KEY_FIELD);
         }
+        send(key, message, outputStream);
     }
 
     @Override
@@ -173,9 +165,8 @@ public class DiscoveryBolt extends AbstractTickStatefulBolt<InMemoryKeyValueStat
     }
 
     @Override
-    public void send(Object payload, String outputStream) {
-        Values values = new Values(payload);
-        outputCollector.emit(outputStream, currentTuple, values);
+    public void sendRegionNotification(SwitchMapping mapping) {
+        outputCollector.emit(Stream.REGION_NOTIFICATION, currentTuple, new Values(mapping));
     }
 
     private void doNetworkDump() {
