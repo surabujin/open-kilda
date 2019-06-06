@@ -21,6 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaHandler;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 /**
@@ -40,8 +42,10 @@ public class KafkaMessageListener {
      * @param message received  message.
      */
     @KafkaHandler
-    public void onMessage(Message message) {
-        log.debug("Message received: {} - {}", Thread.currentThread().getId(), message);
-        messageProcessor.processRequest(message);
+    public void onMessage(@Header(KafkaHeaders.RECEIVED_MESSAGE_KEY) String key, Message message) {
+	try (MDCCloseable closable = MDC.putCloseable(CORRELATION_ID, message.getCorrelationId())) {
+	    log.debug("Message received: {} - {}", Thread.currentThread().getId(), message);
+	    messageProcessor.processRequest(message, key);
+	}
     }
 }

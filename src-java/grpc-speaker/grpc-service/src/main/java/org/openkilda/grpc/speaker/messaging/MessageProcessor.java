@@ -23,12 +23,14 @@ import org.openkilda.messaging.Message;
 import org.openkilda.messaging.command.CommandData;
 import org.openkilda.messaging.command.CommandMessage;
 import org.openkilda.messaging.command.grpc.CreateLogicalPortRequest;
+import org.openkilda.messaging.command.grpc.DeleteLogicalPortRequest;
 import org.openkilda.messaging.command.grpc.DumpLogicalPortsRequest;
 import org.openkilda.messaging.command.grpc.GetPacketInOutStatsRequest;
 import org.openkilda.messaging.command.grpc.GetSwitchInfoRequest;
 import org.openkilda.messaging.info.InfoData;
 import org.openkilda.messaging.info.InfoMessage;
 import org.openkilda.messaging.info.grpc.CreateLogicalPortResponse;
+import org.openkilda.messaging.info.grpc.DeleteLogicalPortResponse;
 import org.openkilda.messaging.info.grpc.DumpLogicalPortsResponse;
 import org.openkilda.messaging.info.grpc.GetPacketInOutStatsResponse;
 import org.openkilda.messaging.info.grpc.GetSwitchInfoResponse;
@@ -67,56 +69,58 @@ public class MessageProcessor {
      *
      * @param message a message to be processed
      */
-    public void processRequest(Message message) {
+    public void processRequest(Message message, Single key) {
         if (message instanceof CommandMessage) {
-            handleCommandMessage((CommandMessage) message);
+            handleCommandMessage((CommandMessage) message, key);
         } else {
             unhandledMessage(message);
         }
     }
 
-    private void handleCommandMessage(CommandMessage command) {
+    private void handleCommandMessage(CommandMessage command, String key) {
         CommandData data = command.getData();
         String correlationId = command.getCorrelationId();
 
         if (data instanceof CreateLogicalPortRequest) {
-            handleCreateLogicalPortRequest((CreateLogicalPortRequest) data, correlationId);
+            handleCreateLogicalPortRequest((CreateLogicalPortRequest) data, correlationId, key);
         } else if (data instanceof DumpLogicalPortsRequest) {
-            handleDumpLogicalPortsRequest((DumpLogicalPortsRequest) data, correlationId);
+            handleDumpLogicalPortsRequest((DumpLogicalPortsRequest) data, correlationId, key);
         } else if (data instanceof GetSwitchInfoRequest) {
-            handleGetSwitchInfoRequest((GetSwitchInfoRequest) data, correlationId);
+            handleGetSwitchInfoRequest((GetSwitchInfoRequest) data, correlationId, key);
         } else if (data instanceof GetPacketInOutStatsRequest) {
-            handleGetPacketInOutStatsRequest((GetPacketInOutStatsRequest) data, correlationId);
+            handleGetPacketInOutStatsRequest((GetPacketInOutStatsRequest) data, correlationId, key);
+        } else if (command instanceof DeleteLogicalPortRequest) {
+            handleDeleteLogicalPortRequest((DeleteLogicalPortRequest) command, message.getCorrelationId(), key);
         } else {
             unhandledMessage(command);
         }
     }
 
-    private void handleCreateLogicalPortRequest(CreateLogicalPortRequest request, String correlationId) {
+    private void handleCreateLogicalPortRequest(CreateLogicalPortRequest request, String correlationId, String key) {
         log.info("Creating logical port {} on switch {}", request.getLogicalPortNumber(), request.getAddress());
         service.createLogicalPort(request.getAddress(), requestMapper.toLogicalPort(request))
                 .thenAccept(port -> sendResponse(
-                        new CreateLogicalPortResponse(request.getAddress(), port, true), correlationId));
+                        new CreateLogicalPortResponse(request.getAddress(), port, true), correlationId, key));
     }
 
-    private void handleDumpLogicalPortsRequest(DumpLogicalPortsRequest request, String correlationId) {
+    private void handleDumpLogicalPortsRequest(DumpLogicalPortsRequest request, String correlationId, String key) {
         log.debug("Dumping logical ports on switch {}", request.getAddress());
         service.dumpLogicalPorts(request.getAddress())
                 .thenAccept(ports -> sendResponse(
-                        new DumpLogicalPortsResponse(request.getAddress(), ports), correlationId));
+                        new DumpLogicalPortsResponse(request.getAddress(), ports), correlationId, key));
     }
 
-    private void handleGetSwitchInfoRequest(GetSwitchInfoRequest request, String correlationId) {
+    private void handleGetSwitchInfoRequest(GetSwitchInfoRequest request, String correlationId, String key) {
         log.debug("Getting switch info for switch {}", request.getAddress());
         service.getSwitchStatus(request.getAddress())
                 .thenAccept(status -> sendResponse(
-                        new GetSwitchInfoResponse(request.getAddress(), status), correlationId));
+                        new GetSwitchInfoResponse(request.getAddress(), status), correlationId, key));
     }
 
-    private void handleGetPacketInOutStatsRequest(GetPacketInOutStatsRequest request, String correlationId) {
+    private void handleGetPacketInOutStatsRequest(GetPacketInOutStatsRequest request, String correlationId, String key) {
         log.debug("Getting switch packet in out stats for switch {}", request.getAddress());
         service.getPacketInOutStats(request.getAddress())
-                .thenAccept(stats -> sendPacketInOutStatsResponse(request, stats, correlationId));
+                .thenAccept(stats -> sendPacketInOutStatsResponse(request, stats, correlationId, key));
     }
 
     private void sendPacketInOutStatsResponse(
@@ -127,10 +131,28 @@ public class MessageProcessor {
         messageProducer.send(statsTopic, message);
     }
 
+    private void handleDeleteLogicalPortRequest(DeleteLogicalPortRequest command, String correlationId, String key) {
+        service.deleteConfigLogicalPort(command.getAddress(), command.getLogicalPortNumber())
+                .thenAccept(port -> sendResponse(
+                        new DeleteLogicalPortResponse(command.getAddress(), command.getLogicalPortNumber(),
+                                port.getDeleted()), correlationId, key))
+                .whenComplete((e, ex) -> {
+                    if (ex != null) {
+                        sendErrorResponse((GrpcRequestFailureException) ex.getCause(), correlationId, key);
+                    }
+                });
+    }
+
     private void sendResponse(InfoData data, String correlationId) {
         InfoMessage message = new InfoMessage(data, System.currentTimeMillis(), correlationId);
         messageProducer.send(grpcResponseTopic, message);
     }
+
+    private void sendErrorResponse(GrpcRequestFailureException ex, String correlationId, String key) {
+        ErrorData data = new ErrorData(ex.getErrorType(), ex.getMessage(), "");
+        ErrorMessage error = new ErrorMessage(data, System.currentTimeMillis(), correlationId);
+        messageProducer.send(responseTopic, key, error);
+     }
 
     private void unhandledMessage(Message message) {
         log.error("GRPC speaker is unable to handle message {}", message);

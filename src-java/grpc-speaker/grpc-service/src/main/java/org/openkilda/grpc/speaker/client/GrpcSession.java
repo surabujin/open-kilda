@@ -38,6 +38,7 @@ import org.openkilda.grpc.speaker.model.LogOferrorsDto;
 import org.openkilda.grpc.speaker.model.LogicalPortDto;
 import org.openkilda.grpc.speaker.model.PortConfigDto;
 import org.openkilda.grpc.speaker.model.RemoteLogServerDto;
+import org.openkilda.messaging.error.ErrorType;
 
 import com.google.common.net.InetAddresses;
 import io.grpc.ManagedChannel;
@@ -48,6 +49,7 @@ import io.grpc.noviflow.License;
 import io.grpc.noviflow.LogMessages;
 import io.grpc.noviflow.LogOferrors;
 import io.grpc.noviflow.LogicalPort;
+import io.grpc.noviflow.LogicalPortType;
 import io.grpc.noviflow.NoviFlowGrpcGrpc;
 import io.grpc.noviflow.OnOff;
 import io.grpc.noviflow.PacketInOutStats;
@@ -84,7 +86,9 @@ public class GrpcSession {
 
     public GrpcSession(String address) {
         if (!InetAddresses.isInetAddress(address) && !InetAddresses.isUriInetAddress(address)) {
-            throw new GrpcRequestFailureException(ErrorCode.ERRNO_23.getCode(), ErrorCode.ERRNO_23.getMessage());
+            log.warn("IP address '{}' of switch is not valid");
+            throw new GrpcRequestFailureException(ErrorCode.ERRNO_23.getCode(), ErrorCode.ERRNO_23.getMessage(),
+                    ErrorType.REQUEST_INVALID);
         }
         this.address = address;
         this.channel = ManagedChannelBuilder.forAddress(address, PORT)
@@ -153,10 +157,12 @@ public class GrpcSession {
     public CompletableFuture<List<CliReply>> setLogicalPort(LogicalPortDto port) {
         Objects.requireNonNull(port.getLogicalPortNumber(), "Logical port number must not be null");
         Objects.requireNonNull(port.getPortNumbers(), "Port number must not be null");
+        Objects.requireNonNull(port.getType(), "Logical port type must not be null");
 
         LogicalPort request = LogicalPort.newBuilder()
                 .addAllPortno(port.getPortNumbers())
                 .setLogicalportno(port.getLogicalPortNumber())
+                .setLogicalporttype(LogicalPortType.forNumber(port.getType().getNumber()))
                 .build();
 
         log.info("About to create logical port: {}", request);
