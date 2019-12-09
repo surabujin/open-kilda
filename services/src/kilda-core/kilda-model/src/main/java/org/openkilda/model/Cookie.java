@@ -390,7 +390,8 @@ public class Cookie implements Comparable<Cookie>, Serializable {
         MULTI_TABLE_ISL_VXLAN_EGRESS_RULES(0x003),
         MULTI_TABLE_ISL_VXLAN_TRANSIT_RULES(0x004),
         MULTI_TABLE_INGRESS_RULES(0x005),
-        INGRESS_SEGMENT(0x006);  // used for ingress flow segment and for one switch flow segments
+        INGRESS_SEGMENT(0x006),  // used for ingress flow segment and for one switch flow segments
+        SHARED_FLOW(0x007);  // OF flow shared across several flow segments
 
         private int value;
 
