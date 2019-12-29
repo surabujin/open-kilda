@@ -19,6 +19,7 @@ import static org.easymock.EasyMock.expect;
 import static org.openkilda.model.SwitchFeature.BFD;
 import static org.openkilda.model.SwitchFeature.BFD_REVIEW;
 import static org.openkilda.model.SwitchFeature.GROUP_PACKET_OUT_CONTROLLER;
+import static org.openkilda.model.SwitchFeature.HALF_SIZE_METADATA;
 import static org.openkilda.model.SwitchFeature.INACCURATE_METER;
 import static org.openkilda.model.SwitchFeature.INACCURATE_SET_VLAN_VID_ACTION;
 import static org.openkilda.model.SwitchFeature.LIMITED_BURST_SIZE;
@@ -139,7 +140,7 @@ public class FeatureDetectorServiceTest extends EasyMockSupport {
         discoveryCheck(makeSwitchMock("NoviFlow Inc", "NW500.0.1", "WB5164-E", OFVersion.OF_13, 2),
                 ImmutableSet.of(
                         GROUP_PACKET_OUT_CONTROLLER, BFD, METERS, RESET_COUNTS_FLAG, INACCURATE_METER, MATCH_UDP_PORT,
-                        MULTI_TABLE, NOVIFLOW_PUSH_POP_VXLAN));
+                        MULTI_TABLE, NOVIFLOW_PUSH_POP_VXLAN, HALF_SIZE_METADATA));
     }
 
     @Test
