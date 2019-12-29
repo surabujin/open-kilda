@@ -20,11 +20,10 @@ import static org.openkilda.floodlight.switchmanager.SwitchFlowUtils.prepareFlow
 import static org.openkilda.floodlight.switchmanager.SwitchManager.ARP_POST_INGRESS_PRIORITY;
 import static org.openkilda.floodlight.switchmanager.SwitchManager.POST_INGRESS_TABLE_ID;
 import static org.openkilda.model.Cookie.ARP_POST_INGRESS_COOKIE;
-import static org.openkilda.model.Metadata.METADATA_ARP_MASK;
-import static org.openkilda.model.Metadata.METADATA_ARP_VALUE;
 
 import org.openkilda.floodlight.service.FeatureDetectorService;
 import org.openkilda.floodlight.switchmanager.SwitchManagerConfig;
+import org.openkilda.floodlight.utils.metadata.MetadataAdapter.MetadataMatch;
 
 import com.google.common.collect.ImmutableList;
 import lombok.Builder;
@@ -50,9 +49,9 @@ public class ArpPostIngressFlowGenerator extends ArpFlowGenerator {
     @Override
     OFFlowMod getArpFlowMod(IOFSwitch sw, OFInstructionMeter meter, List<OFAction> actionList) {
         OFFactory ofFactory = sw.getOFFactory();
+        MetadataMatch metadata = getMetadataAdapter(sw).addressArpMakerFlag(true);
         Match match = ofFactory.buildMatch()
-                .setMasked(MatchField.METADATA, OFMetadata.ofRaw(METADATA_ARP_VALUE),
-                        OFMetadata.ofRaw(METADATA_ARP_MASK))
+                .setMasked(MatchField.METADATA, OFMetadata.of(metadata.getValue()), OFMetadata.of(metadata.getMask()))
                 .build();
 
         actionList.add(actionSendToController(sw.getOFFactory()));

@@ -24,11 +24,7 @@ abstract class NoviflowSpecificFeature extends AbstractFeature {
     public static final String NOVIFLOW_MANUFACTURER_SUFFIX = "noviflow";
 
     boolean isNoviSwitch(IOFSwitch sw) {
-        Optional<SwitchDescription> description = Optional.ofNullable(sw.getSwitchDescription());
-        return description
-                .map(SwitchDescription::getManufacturerDescription)
-                .map(String::toLowerCase)
-                .orElse("").contains(NOVIFLOW_MANUFACTURER_SUFFIX);
+        return getManufacturer(sw).toLowerCase().contains(NOVIFLOW_MANUFACTURER_SUFFIX);
     }
 
     boolean is100GbHw(IOFSwitch sw) {
@@ -37,11 +33,7 @@ abstract class NoviflowSpecificFeature extends AbstractFeature {
         }
 
         Optional<SwitchDescription> description = Optional.ofNullable(sw.getSwitchDescription());
-        String manufacturer = description
-                .map(SwitchDescription::getManufacturerDescription)
-                .orElse("");
-
-        if (E_SWITCH_MANUFACTURER_DESCRIPTION.equalsIgnoreCase(manufacturer)) {
+        if (E_SWITCH_MANUFACTURER_DESCRIPTION.equalsIgnoreCase(getManufacturer(sw))) {
             return false;
         }
 
@@ -61,5 +53,11 @@ abstract class NoviflowSpecificFeature extends AbstractFeature {
         return NOVIFLOW_VIRTUAL_SWITCH_HARDWARE_DESCRIPTION_REGEX.matcher(
                 description.map(SwitchDescription::getHardwareDescription)
                         .orElse("")).matches();
+    }
+
+    protected String getManufacturer(IOFSwitch sw) {
+        return Optional.ofNullable(sw.getSwitchDescription())
+                .map(SwitchDescription::getManufacturerDescription)
+                .orElse("");
     }
 }
