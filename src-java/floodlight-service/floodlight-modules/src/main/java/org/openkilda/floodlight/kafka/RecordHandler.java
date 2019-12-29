@@ -143,6 +143,7 @@ import org.openkilda.model.PortStatus;
 import org.openkilda.model.SwitchId;
 import org.openkilda.model.bitops.cookie.CookieSchema.CookieType;
 import org.openkilda.model.bitops.cookie.ServiceCookieSchema;
+import org.openkilda.model.bitops.cookie.ServiceCookieSchema.ServiceCookieTag;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;

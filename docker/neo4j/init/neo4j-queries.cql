@@ -48,3 +48,5 @@ CREATE INDEX ON :`flow_event` (`flow_id`);
 CREATE INDEX ON :`flow_history` (`task_id`);
 CREATE INDEX ON :`flow_dump` (`flow_id`);
 CREATE INDEX ON :`flow_dump` (`task_id`);
+CREATE CONSTRAINT ON ( shared_of_flow:shared_of_flow ) ASSERT shared_of_flow.entityId IS UNIQUE;
+CREATE CONSTRAINT ON ( shared_of_flow:shared_of_flow ) ASSERT shared_of_flow.unique_index IS UNIQUE;

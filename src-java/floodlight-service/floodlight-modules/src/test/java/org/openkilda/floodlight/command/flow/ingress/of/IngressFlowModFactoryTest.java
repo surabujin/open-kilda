@@ -18,6 +18,7 @@ package org.openkilda.floodlight.command.flow.ingress.of;
 import static org.easymock.EasyMock.expect;
 
 import org.openkilda.floodlight.switchmanager.SwitchManager;
+import org.openkilda.floodlight.utils.MetadataAdapter;
 import org.openkilda.model.Cookie;
 import org.openkilda.model.FlowEncapsulationType;
 import org.openkilda.model.FlowEndpoint;
@@ -66,14 +67,17 @@ abstract class IngressFlowModFactoryTest extends EasyMockSupport {
 
     protected static final Set<SwitchFeature> switchFeatures = ImmutableSet.of(
             SwitchFeature.METERS);
+    protected static final MetadataAdapter metadataAdapter = MetadataAdapter.selectAdapter(switchFeatures);
 
     protected static final String flowId = "flow-id-unit-test";
     protected static final Cookie cookie = FlowSegmentCookieSchema.INSTANCE.make(1, FlowPathDirection.FORWARD);
 
-    protected static final FlowEndpoint endpointSingleVlan = new FlowEndpoint(
-            new SwitchId(datapathIdAlpha.getLong()), 10, 100);
     protected static final FlowEndpoint endpointZeroVlan = new FlowEndpoint(
-            new SwitchId(datapathIdAlpha.getLong()), 11, 0);
+            new SwitchId(datapathIdAlpha.getLong()), 10, 0);
+    protected static final FlowEndpoint endpointSingleVlan = new FlowEndpoint(
+            new SwitchId(datapathIdAlpha.getLong()), 11, 100);
+    protected static final FlowEndpoint endpointDoubleVlan = new FlowEndpoint(
+            new SwitchId(datapathIdAlpha.getLong()), 12, 200, 210);
 
     protected static final MeterConfig meterConfig = new MeterConfig(new MeterId(20), 200);
 
@@ -95,6 +99,37 @@ abstract class IngressFlowModFactoryTest extends EasyMockSupport {
         verifyAll();
     }
 
+    // --- makeOuterVlanMatchAndRemoveMessage
+
+    /*
+    @Test
+    public void makeOuterVlanMatchAndRemoveMessage() {
+        final IngressFlowModFactory factory = makeFactory();
+        final IngressFlowSegmentBase command = factory.getCommand();
+        final FlowEndpoint endpoint = command.getEndpoint();
+        MetadataAdapter.MetadataMatch metadata = MetadataAdapter.INSTANCE.addressOuterVlan(
+                OFVlanVidMatch.ofVlan(command.getEndpoint().getOuterVlanId()));
+        OFFlowAdd expected = of.buildFlowAdd()
+                .setTableId(getTargetPreIngressTableId())
+                .setPriority(FlowSegmentCommand.FLOW_PRIORITY)
+                .setCookie(U64.of(
+                        IngressSegmentCookie.convert(command.getCookie())
+                                .setSubType(IngressSegmentCookie.IngressSegmentSubType.OUTER_VLAN_MATCH_AND_REMOVE)
+                                .getValue()))
+                .setMatch(OfAdapter.INSTANCE.matchVlanId(of, of.buildMatch(), endpoint.getOuterVlanId())
+                        .setExact(MatchField.IN_PORT, OFPort.of(endpoint.getPortNumber()))
+                        .build())
+                .setInstructions(ImmutableList.of(
+                        of.instructions().applyActions(Collections.singletonList(of.actions().popVlan())),
+                        of.instructions().writeMetadata(metadata.getValue(), metadata.getMask()),
+                        of.instructions().gotoTable(TableId.of(SwitchManager.INGRESS_TABLE_ID))))
+                .build();
+        verifyOfMessageEquals(expected, factory.makeOuterVlanMatchAndRemoveMessage());
+    }
+    */
+
+    // --- makeCustomerPortSharedCatchInstallMessage
+
     @Test
     public void makeCustomerPortSharedCatchInstallMessage() {
         IngressFlowModFactory factory = makeFactory();
@@ -113,7 +148,7 @@ abstract class IngressFlowModFactoryTest extends EasyMockSupport {
     }
 
     // --- verify methods
-
+    // FIXME: split on 2 methods
     protected void verifyGoToTableInstruction(Optional<TableId> expected, OFFlowMod message) {
         OFInstructionGotoTable match = null;
         for (OFInstruction instruction : message.getInstructions()) {
@@ -138,6 +173,10 @@ abstract class IngressFlowModFactoryTest extends EasyMockSupport {
     }
 
     abstract IngressFlowModFactory makeFactory();
+
+    abstract TableId getTargetPreIngressTableId();
+
+    abstract TableId getTargetIngressTableId();
 
     MeterId getEffectiveMeterId(MeterConfig meterConfig) {
         if (meterConfig != null) {

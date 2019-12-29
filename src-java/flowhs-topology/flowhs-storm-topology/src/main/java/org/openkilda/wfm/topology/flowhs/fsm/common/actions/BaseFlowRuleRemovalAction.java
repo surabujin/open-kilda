@@ -24,10 +24,10 @@ import org.openkilda.model.SwitchProperties;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.SwitchPropertiesRepository;
 import org.openkilda.wfm.share.flow.resources.FlowResourcesManager;
+import org.openkilda.wfm.share.service.FlowCommandBuilderFactory;
 import org.openkilda.wfm.topology.flowhs.exception.FlowProcessingException;
 import org.openkilda.wfm.topology.flowhs.fsm.common.FlowProcessingFsm;
 import org.openkilda.wfm.topology.flowhs.model.RequestedFlow;
-import org.openkilda.wfm.topology.flowhs.service.FlowCommandBuilderFactory;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -50,11 +50,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
         switchPropertiesRepository = persistenceManager.getRepositoryFactory().createSwitchPropertiesRepository();
     }
 
-    protected boolean isRemoveCustomerPortSharedCatchRule(String flowId, SwitchId ingressSwitchId, int ingressPort) {
-        Set<String> flowIds = findFlowsIdsByEndpointWithMultiTable(ingressSwitchId, ingressPort);
-        return flowIds.size() == 1 && flowIds.iterator().next().equals(flowId);
-    }
-
+    // TODO: del
     protected boolean isFlowTheLastUserOfSharedLldpPortRule(
             String flowId, SwitchId ingressSwitchId, int ingressPort) {
         List<Flow> flows = getFlowsOnSwitchEndpointExcludeCurrentFlow(flowId, ingressSwitchId, ingressPort);
@@ -71,6 +67,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
         return flowsWithLldp.isEmpty();
     }
 
+    // TODO: del
     protected boolean isFlowTheLastUserOfSharedArpPortRule(
             String flowId, SwitchId ingressSwitchId, int ingressPort) {
         List<Flow> flows = getFlowsOnSwitchEndpointExcludeCurrentFlow(flowId, ingressSwitchId, ingressPort);
@@ -84,6 +81,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
                         || f.getDestPort() == ingressPort && f.getDetectConnectedDevices().isDstArp());
     }
 
+    // TODO: del
     private List<Flow> getFlowsOnSwitchEndpointExcludeCurrentFlow(
             String flowId, SwitchId ingressSwitchId, int ingressPort) {
         return flowRepository.findByEndpoint(ingressSwitchId, ingressPort).stream()
@@ -97,6 +95,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
                         format("Properties for switch %s not found", ingressSwitchId)));
     }
 
+    // TODO: del
     protected boolean removeForwardCustomerPortSharedCatchRule(RequestedFlow oldFlow, RequestedFlow newFlow) {
         boolean srcPortChanged = oldFlow.getSrcPort() != newFlow.getSrcPort();
 
@@ -104,6 +103,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
                 && findFlowsIdsByEndpointWithMultiTable(oldFlow.getSrcSwitch(), oldFlow.getSrcPort()).isEmpty();
     }
 
+    // TODO: del
     protected boolean removeReverseCustomerPortSharedCatchRule(RequestedFlow oldFlow, RequestedFlow newFlow) {
         boolean dstPortChanged = oldFlow.getDestPort() != newFlow.getDestPort();
 
@@ -111,6 +111,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
                 && findFlowsIdsByEndpointWithMultiTable(oldFlow.getDestSwitch(), oldFlow.getDestPort()).isEmpty();
     }
 
+    // TODO: del
     protected boolean removeForwardSharedLldpRule(RequestedFlow oldFlow, RequestedFlow newFlow) {
         boolean srcLldpWasSwitchedOff = oldFlow.getDetectConnectedDevices().isSrcLldp()
                 && !newFlow.getDetectConnectedDevices().isSrcLldp();
@@ -119,6 +120,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
                 oldFlow.getFlowId(), oldFlow.getSrcSwitch(), oldFlow.getSrcPort());
     }
 
+    // TODO: del
     protected boolean removeReverseSharedLldpRule(RequestedFlow oldFlow, RequestedFlow newFlow) {
         boolean dstLldpWasSwitchedOff = oldFlow.getDetectConnectedDevices().isDstLldp()
                 && !newFlow.getDetectConnectedDevices().isDstLldp();
@@ -127,6 +129,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
                 oldFlow.getFlowId(), oldFlow.getDestSwitch(), oldFlow.getDestPort());
     }
 
+    // TODO: del
     protected boolean removeForwardSharedArpRule(RequestedFlow oldFlow, RequestedFlow newFlow) {
         boolean srcArpWasSwitchedOff = oldFlow.getDetectConnectedDevices().isSrcArp()
                 && !newFlow.getDetectConnectedDevices().isSrcArp();
@@ -135,6 +138,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
                 oldFlow.getFlowId(), oldFlow.getSrcSwitch(), oldFlow.getSrcPort());
     }
 
+    // TODO: del
     protected boolean removeReverseSharedArpRule(RequestedFlow oldFlow, RequestedFlow newFlow) {
         boolean dstArpWasSwitchedOff = oldFlow.getDetectConnectedDevices().isDstArp()
                 && !newFlow.getDetectConnectedDevices().isDstArp();
