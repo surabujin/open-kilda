@@ -203,7 +203,7 @@ public class SwitchValidateFsm
             sendException(format("Switch properties not found for switch '%s'", switchId), ErrorType.NOT_FOUND);
             return;
         }
-        log.info("Key: {}, validate FSM initialized", key);
+        log.info("Start switch validation (sw={}, key={})", switchId, key);
     }
 
     protected void receiveData(SwitchValidateState from, SwitchValidateState to,

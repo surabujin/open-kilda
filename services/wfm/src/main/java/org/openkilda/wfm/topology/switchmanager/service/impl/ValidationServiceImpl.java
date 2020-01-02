@@ -26,6 +26,7 @@ import org.openkilda.model.Flow;
 import org.openkilda.model.FlowPath;
 import org.openkilda.model.Meter;
 import org.openkilda.model.MeterId;
+import org.openkilda.model.PathId;
 import org.openkilda.model.Switch;
 import org.openkilda.model.SwitchId;
 import org.openkilda.persistence.PersistenceManager;
@@ -43,6 +44,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +74,9 @@ public class ValidationServiceImpl implements ValidationService {
     public ValidateRulesResult validateRules(SwitchId switchId, List<FlowEntry> presentRules,
                                              List<FlowEntry> expectedDefaultRules) {
         log.debug("Validating rules on switch {}", switchId);
+
+        Map<PathId, FlowPath> affectedPaths = loadAffectedPaths(switchId);
+        Map<String, Flow> affectedFlows = extractAffectedFlows(affectedPaths.values());
 
         Set<Long> expectedCookies = flowPathRepository.findBySegmentDestSwitch(switchId).stream()
                 .map(FlowPath::getCookie)
@@ -331,5 +336,31 @@ public class ValidationServiceImpl implements ValidationService {
                 .actual(actual)
                 .expected(expected)
                 .build();
+    }
+
+    private Map<PathId, FlowPath> loadAffectedPaths(SwitchId switchId) {
+        Map<PathId, FlowPath> affectedPaths = new HashMap<>();
+
+        for (FlowPath path : flowPathRepository.findBySegmentSwitch(switchId)) {
+            affectedPaths.put(path.getPathId(), path);
+        }
+        // one-switch-flow have no path segments, so they must be fetched separately
+        for (FlowPath path : flowPathRepository.findByEndpointSwitchIncludeProtected(switchId)) {
+            affectedPaths.put(path.getPathId(), path);
+        }
+
+        return affectedPaths;
+    }
+
+    private Map<String, Flow> extractAffectedFlows(Collection<FlowPath> affectedPaths) {
+        Map<String, Flow> affectedFlows = new HashMap<>();
+
+        for (FlowPath path : affectedPaths) {
+            Flow flow = path.getFlow();
+            if (flow != null) {
+                affectedFlows.put(flow.getFlowId(), flow);
+            }
+        }
+        return affectedFlows;
     }
 }
