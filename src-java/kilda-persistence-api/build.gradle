@@ -12,3 +12,9 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 }
+
+task testJar(type: Jar) {
+    dependsOn compileTestJava
+    classifier 'test'
+    from sourceSets.test.output
+}
