@@ -136,7 +136,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         when(flowEventRepository.existsByTaskId(any())).thenReturn(false);
         when(repositoryFactory.createFlowEventRepository()).thenReturn(flowEventRepository);
 
-        when(persistenceManager.getRepositoryFactory()).thenReturn(repositoryFactory);
+        when(persistenceManagerMock.getRepositoryFactory()).thenReturn(repositoryFactory);
 
         doAnswer(getSpeakerCommandsAnswer()).when(carrier).sendSpeakerRequest(any());
 
@@ -147,8 +147,8 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
             return null;
         }).when(carrier).injectRetry(any());
 
-        rerouteService = new FlowRerouteService(carrier, persistenceManager,
-                pathComputer, flowResourcesManager, TRANSACTION_RETRIES_LIMIT,
+        rerouteService = new FlowRerouteService(carrier, persistenceManagerMock,
+                pathComputer, flowResourcesManagerMock, TRANSACTION_RETRIES_LIMIT,
                 PATH_ALLOCATION_RETRIES_LIMIT, PATH_ALLOCATION_RETRY_DELAY, SPEAKER_COMMAND_RETRIES_LIMIT);
 
         currentRequestKey = "test-key";
@@ -174,7 +174,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         assertEquals(OLD_FORWARD_FLOW_PATH, flow.getForwardPathId());
         assertEquals(OLD_REVERSE_FLOW_PATH, flow.getReversePathId());
         verify(pathComputer, times(1)).getPath(any(), any());
-        verify(flowResourcesManager, never()).allocateFlowResources(any());
+        verify(flowResourcesManagerMock, never()).allocateFlowResources(any());
         verify(carrier, never()).sendSpeakerRequest(any());
         verify(carrier, times(1)).sendNorthboundResponse(any());
     }
@@ -193,7 +193,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         assertEquals(OLD_FORWARD_FLOW_PATH, flow.getForwardPathId());
         assertEquals(OLD_REVERSE_FLOW_PATH, flow.getReversePathId());
         verify(pathComputer, times(PATH_ALLOCATION_RETRIES_LIMIT + 1)).getPath(any(), any());
-        verify(flowResourcesManager, never()).allocateFlowResources(any());
+        verify(flowResourcesManagerMock, never()).allocateFlowResources(any());
         verify(carrier, never()).sendSpeakerRequest(any());
         verify(carrier, times(1)).sendNorthboundResponse(any());
     }
@@ -217,7 +217,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         verify(pathComputer, times(PATH_ALLOCATION_RETRIES_LIMIT + 1)).getPath(any(), any());
         verify(islRepository, times(PATH_ALLOCATION_RETRIES_LIMIT + 1))
                 .updateAvailableBandwidth(any(), anyInt(), any(), anyInt(), anyLong());
-        verify(flowResourcesManager, times(PATH_ALLOCATION_RETRIES_LIMIT + 1)).allocateFlowResources(any());
+        verify(flowResourcesManagerMock, times(PATH_ALLOCATION_RETRIES_LIMIT + 1)).allocateFlowResources(any());
         verify(carrier, never()).sendSpeakerRequest(any());
         verify(carrier, times(1)).sendNorthboundResponse(any());
     }
@@ -227,7 +227,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
             throws RecoverableException, UnroutableFlowException, ResourceAllocationException {
         Flow flow = build2SwitchFlow();
         when(pathComputer.getPath(any(), any())).thenReturn(build2SwitchPathPair(2, 3));
-        when(flowResourcesManager.allocateFlowResources(any()))
+        when(flowResourcesManagerMock.allocateFlowResources(any()))
                 .thenThrow(new ResourceAllocationException("No resources"));
 
         rerouteService.handleRequest(new FlowRerouteFact(
@@ -237,7 +237,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         assertEquals(OLD_FORWARD_FLOW_PATH, flow.getForwardPathId());
         assertEquals(OLD_REVERSE_FLOW_PATH, flow.getReversePathId());
         verify(pathComputer, times(PATH_ALLOCATION_RETRIES_LIMIT + 1)).getPath(any(), any());
-        verify(flowResourcesManager, times(PATH_ALLOCATION_RETRIES_LIMIT + 1)).allocateFlowResources(any());
+        verify(flowResourcesManagerMock, times(PATH_ALLOCATION_RETRIES_LIMIT + 1)).allocateFlowResources(any());
         verify(carrier, never()).sendSpeakerRequest(any());
         verify(carrier, times(1)).sendNorthboundResponse(any());
     }
@@ -253,8 +253,8 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         rerouteService.handleRequest(new FlowRerouteFact(
                 "test_key", commandContext, FLOW_ID, null, false, false, null));
 
-        verify(flowResourcesManager, times(0)).deallocatePathResources(any());
-        verify(flowResourcesManager, times(0)).deallocatePathResources(any(), anyLong(), any());
+        verify(flowResourcesManagerMock, times(0)).deallocatePathResources(any());
+        verify(flowResourcesManagerMock, times(0)).deallocatePathResources(any(), anyLong(), any());
     }
 
     @Test
@@ -543,7 +543,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         verify(carrier, times(1)).sendNorthboundResponse(any());
 
         doThrow(new RuntimeException("A persistence error"))
-                .when(flowResourcesManager).deallocatePathResources(argThat(
+                .when(flowResourcesManagerMock).deallocatePathResources(argThat(
                 hasProperty("forward",
                         hasProperty("pathId", equalTo(OLD_FORWARD_FLOW_PATH)))));
 
@@ -617,7 +617,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         FlowResources resourcesSecond = makeFlowResources(
                 flow.getFlowId(), pathForwardSecond, pathReverseSecond, resourcesFirst);
 
-        when(flowResourcesManager.allocateFlowResources(any()))
+        when(flowResourcesManagerMock.allocateFlowResources(any()))
                 .thenReturn(resourcesFirst)
                 .thenReturn(resourcesSecond);
 
@@ -877,7 +877,7 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
         FlowResources original = makeFlowResources(FLOW_ID, OLD_FORWARD_FLOW_PATH, OLD_REVERSE_FLOW_PATH);
         FlowResources target = makeFlowResources(FLOW_ID, NEW_FORWARD_FLOW_PATH, NEW_REVERSE_FLOW_PATH, original);
 
-        when(flowResourcesManager.allocateFlowResources(any())).thenReturn(target);
+        when(flowResourcesManagerMock.allocateFlowResources(any())).thenReturn(target);
 
         return target;
     }
@@ -910,10 +910,10 @@ public class FlowRerouteServiceTest extends AbstractFlowTest {
                                  .build())
                 .build();
 
-        when(flowResourcesManager.getEncapsulationResources(
+        when(flowResourcesManagerMock.getEncapsulationResources(
                 eq(forward), eq(reverse), eq(FlowEncapsulationType.TRANSIT_VLAN)))
                 .thenReturn(Optional.of(resources.getForward().getEncapsulationResources()));
-        when(flowResourcesManager.getEncapsulationResources(
+        when(flowResourcesManagerMock.getEncapsulationResources(
                 eq(reverse), eq(forward), eq(FlowEncapsulationType.TRANSIT_VLAN)))
                 .thenReturn(Optional.of(resources.getReverse().getEncapsulationResources()));
 

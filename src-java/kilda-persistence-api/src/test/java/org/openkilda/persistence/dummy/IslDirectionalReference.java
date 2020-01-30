@@ -15,17 +15,16 @@
 
 package org.openkilda.persistence.dummy;
 
-import org.openkilda.model.SwitchId;
+import org.openkilda.model.IslEndpoint;
 
 import lombok.Value;
 
 @Value
-public class InnerSwitchLink {
-    private SwitchId switchId;
-    private int aEndPort;
-    private int zEndPort;
+public class IslDirectionalReference {
+    private final IslEndpoint aEnd;
+    private final IslEndpoint zEnd;
 
-    public InnerSwitchLink makeOpposite() {
-        return new InnerSwitchLink(switchId, zEndPort, aEndPort);
+    public IslDirectionalReference makeOpposite() {
+        return new IslDirectionalReference(zEnd, aEnd);
     }
 }

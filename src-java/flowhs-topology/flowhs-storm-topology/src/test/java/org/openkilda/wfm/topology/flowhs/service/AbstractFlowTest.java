@@ -15,28 +15,43 @@
 
 package org.openkilda.wfm.topology.flowhs.service;
 
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.openkilda.floodlight.api.request.FlowSegmentRequest;
 import org.openkilda.floodlight.api.response.SpeakerFlowSegmentResponse;
+import org.openkilda.messaging.Message;
+import org.openkilda.messaging.error.ErrorMessage;
+import org.openkilda.messaging.error.ErrorType;
 import org.openkilda.model.Cookie;
 import org.openkilda.model.FeatureToggles;
+import org.openkilda.model.Flow;
+import org.openkilda.model.FlowEncapsulationType;
+import org.openkilda.model.FlowEndpoint;
+import org.openkilda.model.FlowStatus;
 import org.openkilda.model.SwitchId;
 import org.openkilda.pce.PathComputer;
+import org.openkilda.persistence.Neo4jBasedTest;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.TransactionCallback;
 import org.openkilda.persistence.TransactionCallbackWithoutResult;
 import org.openkilda.persistence.TransactionManager;
+import org.openkilda.persistence.dummy.PersistenceEntityDummyFactory;
 import org.openkilda.persistence.repositories.FeatureTogglesRepository;
 import org.openkilda.persistence.repositories.FlowPathRepository;
 import org.openkilda.persistence.repositories.FlowRepository;
 import org.openkilda.persistence.repositories.IslRepository;
+import org.openkilda.persistence.repositories.RepositoryFactory;
 import org.openkilda.wfm.share.flow.resources.FlowResourcesManager;
 
 import lombok.SneakyThrows;
 import net.jodah.failsafe.Failsafe;
 import net.jodah.failsafe.RetryPolicy;
+import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.stubbing.Answer;
 
@@ -46,9 +61,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 
-public abstract class AbstractFlowTest {
+public abstract class AbstractFlowTest extends Neo4jBasedTest {
+    protected static PersistenceEntityDummyFactory dummyFactory;
+
+    protected static final SwitchId SWITCH_1 = new SwitchId(1);
+    protected static final SwitchId SWITCH_2 = new SwitchId(2);
+
+    private FlowPathRepository flowPathRepositorySpy = null;
+
     @Mock
-    PersistenceManager persistenceManager;
+    PersistenceManager persistenceManagerMock;
     @Mock
     FlowRepository flowRepository;
     @Mock
@@ -56,7 +78,7 @@ public abstract class AbstractFlowTest {
     @Mock
     PathComputer pathComputer;
     @Mock
-    FlowResourcesManager flowResourcesManager;
+    FlowResourcesManager flowResourcesManagerMock;
     @Mock
     FeatureTogglesRepository featureTogglesRepository;
     @Mock
@@ -65,9 +87,14 @@ public abstract class AbstractFlowTest {
     final Queue<FlowSegmentRequest> requests = new ArrayDeque<>();
     final Map<SwitchId, Map<Cookie, FlowSegmentRequest>> installedSegments = new HashMap<>();
 
+    @BeforeClass
+    public static void beforeClass() {
+        dummyFactory = new PersistenceEntityDummyFactory(persistenceManager);
+    }
+
     @Before
     public void before() {
-        when(persistenceManager.getTransactionManager()).thenReturn(new TransactionManager() {
+        when(persistenceManagerMock.getTransactionManager()).thenReturn(new TransactionManager() {
             @SneakyThrows
             @Override
             public <T, E extends Throwable> T doInTransaction(TransactionCallback<T, E> action) throws E {
@@ -105,6 +132,8 @@ public abstract class AbstractFlowTest {
                         .deleteFlowEnabled(true)
                         .build()
         ));
+
+        alterFeatureToggles(true, true, true);
     }
 
     protected SpeakerFlowSegmentResponse buildSpeakerResponse(FlowSegmentRequest flowRequest) {
@@ -139,5 +168,63 @@ public abstract class AbstractFlowTest {
                 .switchId(request.getSwitchId())
                 .success(true)
                 .build();
+    }
+
+    protected Flow fetchFlow(String flowId) {
+        FlowRepository repository = persistenceManager.getRepositoryFactory().createFlowRepository();
+        return repository.findById(flowId)
+                .orElseThrow(() -> new AssertionError(String.format(
+                        "Flow %s not found in persistent storage", flowId)));
+    }
+
+    protected FlowPathRepository setupFlowPathRepositorySpy() {
+        if (flowPathRepositorySpy == null) {
+            flowPathRepositorySpy = spy(persistenceManager.getRepositoryFactory().createFlowPathRepository());
+            when(repositoryFactorySpy.createFlowPathRepository()).thenReturn(flowPathRepositorySpy);
+        }
+        return flowPathRepositorySpy;
+    }
+
+    protected void verifyNorthboundResponseType(FlowGenericCarrier carrierMock, ErrorType expectedErrorType) {
+        ArgumentCaptor<Message> responseCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(carrierMock).sendNorthboundResponse(responseCaptor.capture());
+
+        Message rawResponse = responseCaptor.getValue();
+        Assert.assertNotNull(rawResponse);
+        Assert.assertTrue(rawResponse instanceof ErrorMessage);
+        ErrorMessage response = (ErrorMessage) rawResponse;
+
+        Assert.assertSame(expectedErrorType, response.getData().getErrorType());
+    }
+
+    protected void alterFeatureToggles(Boolean isCreateAllowed, Boolean isUpdateAllowed, Boolean isDeleteAllowed) {
+        FeatureTogglesRepository repository = persistenceManager
+                .getRepositoryFactory().createFeatureTogglesRepository();
+
+        FeatureToggles toggles = repository.find()
+                .orElseGet(FeatureToggles::new);
+
+        if (isCreateAllowed != null) {
+            toggles.setCreateFlowEnabled(isCreateAllowed);
+        }
+        if (isUpdateAllowed != null) {
+            toggles.setUpdateFlowEnabled(isUpdateAllowed);
+        }
+        if (isDeleteAllowed != null) {
+            toggles.setDeleteFlowEnabled(isDeleteAllowed);
+        }
+
+        repository.createOrUpdate(toggles);
+    }
+
+    protected Flow make2SwitchFlow() {
+        FlowEndpoint aEnd = new FlowEndpoint(SWITCH_1, 10, 100);
+        FlowEndpoint zEnd = new FlowEndpoint(SWITCH_2, 20, 200);
+        return dummyFactory.makeFlow(aEnd, zEnd);
+    }
+
+    protected void flushFlowChanges(Flow flow) {
+        FlowRepository repository = persistenceManager.getRepositoryFactory().createFlowRepository();
+        repository.createOrUpdate(flow);
     }
 }

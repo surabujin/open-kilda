@@ -107,7 +107,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
     @Before
     public void init() {
         RepositoryFactory repositoryFactory = mock(RepositoryFactory.class);
-        when(persistenceManager.getRepositoryFactory()).thenReturn(repositoryFactory);
+        when(persistenceManagerMock.getRepositoryFactory()).thenReturn(repositoryFactory);
         KildaConfigurationRepository configurationRepository = mock(KildaConfigurationRepository.class);
         when(configurationRepository.get()).thenReturn(KildaConfiguration.DEFAULTS);
         when(repositoryFactory.createKildaConfigurationRepository()).thenReturn(configurationRepository);
@@ -149,13 +149,13 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
         when(repositoryFactory.createFlowEventRepository()).thenReturn(flowEventRepository);
 
         doAnswer(getSpeakerCommandsAnswer()).when(carrier).sendSpeakerRequest(any(FlowSegmentRequest.class));
-        target = new FlowCreateService(carrier, persistenceManager, pathComputer, flowResourcesManager,
+        target = new FlowCreateService(carrier, persistenceManagerMock, pathComputer, flowResourcesManagerMock,
                 GENERIC_RETRIES_LIMIT, TRANSACTION_RETRIES_LIMIT, SPEAKER_COMMAND_RETRIES_LIMIT);
     }
 
     @After
     public void reset() {
-        Mockito.reset(persistenceManager, flowRepository, flowPathRepository, flowResourcesManager,
+        Mockito.reset(persistenceManagerMock, flowRepository, flowPathRepository, flowResourcesManagerMock,
                 pathComputer, carrier);
     }
 
@@ -176,7 +176,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
                 .build();
         mockFlowCreationInDb(flowId);
         FlowResources flowResources = allocateResources(flowId);
-        when(flowResourcesManager.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
+        when(flowResourcesManagerMock.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
 
         when(pathComputer.getPath(any(Flow.class))).thenReturn(getPath3Switches());
 
@@ -225,7 +225,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
                 .build();
         mockFlowCreationInDb(flowId);
         FlowResources flowResources = allocateResources(flowId);
-        when(flowResourcesManager.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
+        when(flowResourcesManagerMock.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
         when(pathComputer.getPath(any(Flow.class))).thenReturn(getPathOneSwitch());
 
         target.handleRequest(key, new CommandContext(), flowRequest);
@@ -271,7 +271,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
                 .build();
         mockFlowCreationInDb(flowId);
         FlowResources flowResources = allocateResources(flowId);
-        when(flowResourcesManager.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
+        when(flowResourcesManagerMock.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
         when(pathComputer.getPath(any(Flow.class))).thenReturn(getPath3Switches());
         target.handleRequest(key, new CommandContext(), flowRequest);
 
@@ -330,7 +330,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
                 .destinationVlan(3)
                 .build();
         FlowResources flowResources = allocateResources(flowId);
-        when(flowResourcesManager.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
+        when(flowResourcesManagerMock.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
         mockFlowCreationInDb(flowId);
         when(pathComputer.getPath(any(Flow.class))).thenReturn(getPath3Switches());
         target.handleRequest(key, new CommandContext(), flowRequest);
@@ -380,7 +380,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
     @Test
     public void shouldCreateFlowWithRetryNonIngressRuleIfSwitchIsUnavailable() throws Exception {
         int retriesLimit = 10;
-        target = new FlowCreateService(carrier, persistenceManager, pathComputer, flowResourcesManager,
+        target = new FlowCreateService(carrier, persistenceManagerMock, pathComputer, flowResourcesManagerMock,
                 GENERIC_RETRIES_LIMIT, TRANSACTION_RETRIES_LIMIT, retriesLimit);
         String key = "retries_non_ingress_installation";
         String flowId = "failed_flow_id";
@@ -396,7 +396,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
                 .destinationVlan(3)
                 .build();
         FlowResources flowResources = allocateResources(flowId);
-        when(flowResourcesManager.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
+        when(flowResourcesManagerMock.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
         mockFlowCreationInDb(flowId);
         when(pathComputer.getPath(any(Flow.class))).thenReturn(getPath3Switches());
         target.handleRequest(key, new CommandContext(), flowRequest);
@@ -442,7 +442,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
     @Test
     public void shouldCreateFlowWithRetryIngressRuleIfSwitchIsUnavailable() throws Exception {
         int retriesLimit = 10;
-        target = new FlowCreateService(carrier, persistenceManager, pathComputer, flowResourcesManager,
+        target = new FlowCreateService(carrier, persistenceManagerMock, pathComputer, flowResourcesManagerMock,
                 GENERIC_RETRIES_LIMIT, TRANSACTION_RETRIES_LIMIT, retriesLimit);
         String key = "retries_non_ingress_installation";
         String flowId = "failed_flow_id";
@@ -458,7 +458,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
                 .destinationVlan(3)
                 .build();
         FlowResources flowResources = allocateResources(flowId);
-        when(flowResourcesManager.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
+        when(flowResourcesManagerMock.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
         mockFlowCreationInDb(flowId);
         when(pathComputer.getPath(any(Flow.class))).thenReturn(getPath3Switches());
         target.handleRequest(key, new CommandContext(), flowRequest);
@@ -514,7 +514,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
                 .pinned(true)
                 .build();
         FlowResources flowResources = allocateResources(flowId);
-        when(flowResourcesManager.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
+        when(flowResourcesManagerMock.allocateFlowResources(any(Flow.class))).thenReturn(flowResources);
         when(pathComputer.getPath(any(Flow.class))).thenReturn(getPath3Switches());
         mockFlowCreationInDb(flowId);
 
@@ -564,7 +564,7 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
         mockFlowCreationInDb(flowId);
         FlowResources mainResources = allocateResources(flowId);
         FlowResources protectedResources = allocateResources(flowId);
-        when(flowResourcesManager.allocateFlowResources(any(Flow.class)))
+        when(flowResourcesManagerMock.allocateFlowResources(any(Flow.class)))
                 .thenReturn(mainResources)
                 .thenReturn(protectedResources);
         when(pathComputer.getPath(any(Flow.class)))
@@ -753,11 +753,11 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
                 .unmaskedCookie(COOKIE)
                 .build();
 
-        when(flowResourcesManager.getEncapsulationResources(eq(forwardResources.getPathId()),
+        when(flowResourcesManagerMock.getEncapsulationResources(eq(forwardResources.getPathId()),
                 eq(reverseResources.getPathId()), eq(FlowEncapsulationType.TRANSIT_VLAN)))
                 .thenReturn(Optional.of(TransitVlanEncapsulation.builder().transitVlan(
                         getTransitVlans(flowResources, true)).build()));
-        when(flowResourcesManager.getEncapsulationResources(eq(reverseResources.getPathId()),
+        when(flowResourcesManagerMock.getEncapsulationResources(eq(reverseResources.getPathId()),
                 eq(forwardResources.getPathId()), eq(FlowEncapsulationType.TRANSIT_VLAN)))
                 .thenReturn(Optional.of(TransitVlanEncapsulation.builder().transitVlan(
                         getTransitVlans(flowResources, false)).build()));

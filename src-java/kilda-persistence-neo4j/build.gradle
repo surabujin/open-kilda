@@ -14,6 +14,7 @@ dependencies {
 
     testImplementation 'org.neo4j:neo4j-ogm-test'
     testImplementation 'org.hamcrest:hamcrest-library'
+    testImplementation 'org.mockito:mockito-core'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

@@ -15,8 +15,6 @@
 
 package org.openkilda.persistence.dummy;
 
-import static java.util.Collections.emptyList;
-
 import org.openkilda.model.Cookie;
 import org.openkilda.model.Flow;
 import org.openkilda.model.FlowCookie;
@@ -51,14 +49,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class PersistenceEntityDummyFactory {
     private TransactionManager txManager;
-
     private final SwitchRepository switchRepository;
     private final SwitchPropertiesRepository switchPropertiesRepository;
     private final IslRepository islRepository;
@@ -105,6 +101,10 @@ public class PersistenceEntityDummyFactory {
                 .orElseGet(() -> makeSwitch(switchId));
     }
 
+    public Isl fetchOrCreateIsl(IslDirectionalReference reference) {
+        return fetchOrCreateIsl(reference.getAEnd(), reference.getZEnd());
+    }
+
     public Isl fetchOrCreateIsl(IslEndpoint aEnd, IslEndpoint zEnd) {
         return islRepository.findByEndpoints(
                 aEnd.getSwitchId(), aEnd.getPortNumber(),
@@ -141,11 +141,11 @@ public class PersistenceEntityDummyFactory {
         return isl;
     }
 
-    public Flow makeFlow(FlowEndpoint aEnd, FlowEndpoint zEnd, InnerSwitchLink... trace) {
+    public Flow makeFlow(FlowEndpoint aEnd, FlowEndpoint zEnd, IslDirectionalReference... trace) {
         return makeFlow(aEnd, zEnd, Arrays.asList(trace));
     }
 
-    public Flow makeFlow(FlowEndpoint aEnd, FlowEndpoint zEnd, List<InnerSwitchLink> trace) {
+    public Flow makeFlow(FlowEndpoint aEnd, FlowEndpoint zEnd, List<IslDirectionalReference> pathHint) {
         Flow flow = flowDefaults.fill(Flow.builder())
                 .flowId(idProvider.provideFlowId())
                 .srcSwitch(fetchOrCreateSwitch(aEnd.getSwitchId()))
@@ -156,9 +156,9 @@ public class PersistenceEntityDummyFactory {
                 .destVlan(zEnd.getVlanId())
                 .build();
         txManager.doInTransaction(() -> {
-            makeFlowPathPair(flow, aEnd, zEnd, trace);
+            makeFlowPathPair(flow, aEnd, zEnd, pathHint);
             if (flow.isAllocateProtectedPath()) {
-                makeFlowPathPair(flow, aEnd, zEnd, trace, Stream.of("protected"));
+                makeFlowPathPair(flow, aEnd, zEnd, pathHint, Collections.singletonList("protected"));
             }
             flowRepository.createOrUpdate(flow);
         });
@@ -167,36 +167,37 @@ public class PersistenceEntityDummyFactory {
     }
 
     private void makeFlowPathPair(
-            Flow flow, FlowEndpoint aEnd, FlowEndpoint zEnd, List<InnerSwitchLink> forwardTrace) {
-        makeFlowPathPair(flow, aEnd, zEnd, forwardTrace, Stream.of());
+            Flow flow, FlowEndpoint aEnd, FlowEndpoint zEnd, List<IslDirectionalReference> forwardTrace) {
+        makeFlowPathPair(flow, aEnd, zEnd, forwardTrace, Collections.emptyList());
     }
 
     private void makeFlowPathPair(
-            Flow flow, FlowEndpoint aEnd, FlowEndpoint zEnd, List<InnerSwitchLink> forwardTrace,
-            Stream<String> tags) {
+            Flow flow, FlowEndpoint aEnd, FlowEndpoint zEnd, List<IslDirectionalReference> forwardPathHint,
+            List<String> tags) {
         long flowEffectiveId = idProvider.provideFlowEffectiveId();
         makeFlowCookie(flow.getFlowId(), flowEffectiveId);
 
-        List<InnerSwitchLink> reverseTrace = forwardTrace.stream()
-                .map(InnerSwitchLink::makeOpposite)
+        List<IslDirectionalReference> reversePathHint = forwardPathHint.stream()
+                .map(IslDirectionalReference::makeOpposite)
                 .collect(Collectors.toList());
-        Collections.reverse(reverseTrace);  // inline
+        Collections.reverse(reversePathHint);  // inline
 
-        List<PathSegment> forwardSegments = makePathSegments(aEnd.getSwitchId(), zEnd.getSwitchId(), forwardTrace);
+        List<PathSegment> forwardSegments = makePathSegments(aEnd.getSwitchId(), zEnd.getSwitchId(), forwardPathHint);
         flow.setForwardPath(makePath(
-                flow, aEnd, zEnd, forwardSegments, Cookie.buildForwardCookie(flowEffectiveId),
-                Stream.concat(tags, Stream.of("forward"))));
+                flow, aEnd, zEnd, forwardSegments, Cookie.buildForwardCookie(flowEffectiveId), tags, "forward"));
 
-        List<PathSegment> reverseSegments = makePathSegments(zEnd.getSwitchId(), aEnd.getSwitchId(), reverseTrace);
+        List<PathSegment> reverseSegments = makePathSegments(zEnd.getSwitchId(), aEnd.getSwitchId(), reversePathHint);
         flow.setReversePath(makePath(
-                flow, zEnd, aEnd, reverseSegments, Cookie.buildReverseCookie(flowEffectiveId),
-                Stream.concat(tags, Stream.of("reverse"))));
+                flow, zEnd, aEnd, reverseSegments, Cookie.buildReverseCookie(flowEffectiveId), tags, "reverse"));
     }
 
     private FlowPath makePath(
             Flow flow, FlowEndpoint ingress, FlowEndpoint egress, List<PathSegment> segments, Cookie cookie,
-            Stream<String> tags) {
-        PathId pathId = idProvider.providePathId(flow.getFlowId(), tags);
+            List<String> tags, String... extraTags) {
+        List<String> allTags = new ArrayList<>(tags);
+        allTags.addAll(Arrays.asList(extraTags));
+
+        PathId pathId = idProvider.providePathId(flow.getFlowId(), allTags.stream());
         if (FlowEncapsulationType.TRANSIT_VLAN == flow.getEncapsulationType()) {
             makeTransitVlan(flow.getFlowId(), pathId);
         } else if (FlowEncapsulationType.VXLAN == flow.getEncapsulationType()) {
@@ -220,45 +221,40 @@ public class PersistenceEntityDummyFactory {
     }
 
     private List<PathSegment> makePathSegments(
-            SwitchId aEndSwitchId, SwitchId zEndSwitchId, List<InnerSwitchLink> trace) {
-        Iterator<InnerSwitchLink> aSideIter = trace.iterator();
-        Iterator<InnerSwitchLink> zSideIter = trace.iterator();
-
-        if (!zSideIter.hasNext()) {
-            return emptyList();
-        }
-
-        InnerSwitchLink first = zSideIter.next();  // seek z-side to correct location
-
+            SwitchId aEndSwitchId, SwitchId zEndSwitchId, List<IslDirectionalReference> pathHint) {
         List<PathSegment> results = new ArrayList<>();
-        InnerSwitchLink aEnd;
-        InnerSwitchLink zEnd = first;
-        while (zSideIter.hasNext()) {
-            aEnd = aSideIter.next();
-            zEnd = zSideIter.next();
 
+        IslDirectionalReference first = null;
+        IslDirectionalReference last = null;
+        for (IslDirectionalReference entry : pathHint) {
+            last = entry;
+            if (first == null) {
+                first = entry;
+            }
+
+            IslEndpoint aEnd = entry.getAEnd();
             Switch aEndSwitch = fetchOrCreateSwitch(aEnd.getSwitchId());
+
+            IslEndpoint zEnd = entry.getZEnd();
             Switch zEndSwitch = fetchOrCreateSwitch(zEnd.getSwitchId());
 
-            fetchOrCreateIsl(
-                    new IslEndpoint(aEnd.getSwitchId(), aEnd.getZEndPort()),
-                    new IslEndpoint(zEnd.getSwitchId(), zEnd.getAEndPort()));
+            fetchOrCreateIsl(entry);
 
             results.add(PathSegment.builder()
-                    .srcSwitch(aEndSwitch).srcPort(aEnd.getZEndPort())
-                    .destSwitch(zEndSwitch).destPort(zEnd.getAEndPort())
+                    .srcSwitch(aEndSwitch).srcPort(aEnd.getPortNumber())
+                    .destSwitch(zEndSwitch).destPort(zEnd.getPortNumber())
                     .build());
         }
 
-        if (! aEndSwitchId.equals(first.getSwitchId())) {
+        if (first != null && ! aEndSwitchId.equals(first.getAEnd().getSwitchId())) {
             throw new IllegalArgumentException(String.format(
-                    "Flow's trace do not start on flow endpoint (a-end switch %s, first trace entry %s)",
+                    "Flow's trace do not start on flow endpoint (a-end switch %s, first path's hint entry %s)",
                     aEndSwitchId, first));
         }
-        if (! zEndSwitchId.equals(zEnd.getSwitchId())) {
+        if (last != null && ! zEndSwitchId.equals(last.getZEnd().getSwitchId())) {
             throw new IllegalArgumentException(String.format(
-                    "Flow's trace do not end on flow endpoint (z-end switch %s, last trace entry %s)",
-                    zEndSwitchId, zEnd));
+                    "Flow's trace do not end on flow endpoint (z-end switch %s, last path's hint entry %s)",
+                    zEndSwitchId, last));
         }
 
         return results;
