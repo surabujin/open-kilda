@@ -35,6 +35,7 @@ import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.TransactionManager;
 import org.openkilda.persistence.repositories.FlowCookieRepository;
 import org.openkilda.persistence.repositories.FlowMeterRepository;
+import org.openkilda.persistence.repositories.FlowPathRepository;
 import org.openkilda.persistence.repositories.FlowRepository;
 import org.openkilda.persistence.repositories.IslRepository;
 import org.openkilda.persistence.repositories.RepositoryFactory;
@@ -44,21 +45,24 @@ import org.openkilda.persistence.repositories.TransitVlanRepository;
 import org.openkilda.persistence.repositories.VxlanRepository;
 
 import lombok.Getter;
+import lombok.NonNull;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class PersistenceEntityDummyFactory {
+public class PersistenceDummyEntityFactory {
     private TransactionManager txManager;
     private final SwitchRepository switchRepository;
     private final SwitchPropertiesRepository switchPropertiesRepository;
     private final IslRepository islRepository;
     private final FlowRepository flowRepository;
+    private final FlowPathRepository flowPathRepository;
     private final FlowMeterRepository flowMeterRepository;
     private final FlowCookieRepository flowCookieRepository;
     private final TransitVlanRepository transitVlanRepository;
@@ -82,7 +86,7 @@ public class PersistenceEntityDummyFactory {
     private final FlowPathDefaults flowPathDefaults = new FlowPathDefaults();
 
 
-    public PersistenceEntityDummyFactory(PersistenceManager persistenceManager) {
+    public PersistenceDummyEntityFactory(PersistenceManager persistenceManager) {
         txManager = persistenceManager.getTransactionManager();
 
         RepositoryFactory repositoryFactory = persistenceManager.getRepositoryFactory();
@@ -90,6 +94,7 @@ public class PersistenceEntityDummyFactory {
         switchPropertiesRepository = repositoryFactory.createSwitchPropertiesRepository();
         islRepository = repositoryFactory.createIslRepository();
         flowRepository = repositoryFactory.createFlowRepository();
+        flowPathRepository = repositoryFactory.createFlowPathRepository();
         flowMeterRepository = repositoryFactory.createFlowMeterRepository();
         flowCookieRepository = repositoryFactory.createFlowCookieRepository();
         transitVlanRepository = repositoryFactory.createTransitVlanRepository();
@@ -161,6 +166,8 @@ public class PersistenceEntityDummyFactory {
                 makeFlowPathPair(flow, aEnd, zEnd, pathHint, Collections.singletonList("protected"));
             }
             flowRepository.createOrUpdate(flow);
+
+            allocateFlowBandwidth(flow);
         });
 
         return flow;
@@ -298,5 +305,28 @@ public class PersistenceEntityDummyFactory {
                 .build();
         transitVxLanRepository.createOrUpdate(entity);
         return entity;
+    }
+
+    private void allocateFlowBandwidth(Flow flow) {
+        for (FlowPath path : flow.getPaths()) {
+            for (PathSegment segment : path.getSegments()) {
+                recalculateIslAvailableBandwidth(segment);
+            }
+        }
+    }
+
+    private void recalculateIslAvailableBandwidth(PathSegment segment) {
+        SwitchId srcSwitchId = segment.getSrcSwitch().getSwitchId();
+        SwitchId dstSwitchId = segment.getDestSwitch().getSwitchId();
+        long usedBandwidth = flowPathRepository.getUsedBandwidthBetweenEndpoints(
+                srcSwitchId, segment.getSrcPort(),
+                dstSwitchId, segment.getDestPort());
+
+        Optional<Isl> matchedIsl = islRepository.findByEndpoints(
+                srcSwitchId, segment.getSrcPort(), dstSwitchId, segment.getDestPort());
+        matchedIsl.ifPresent(isl -> {
+            isl.setAvailableBandwidth(isl.getMaxBandwidth() - usedBandwidth);
+            islRepository.createOrUpdate(isl);
+        });
     }
 }

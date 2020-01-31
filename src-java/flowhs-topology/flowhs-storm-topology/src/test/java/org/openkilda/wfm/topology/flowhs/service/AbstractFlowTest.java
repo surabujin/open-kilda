@@ -15,6 +15,9 @@
 
 package org.openkilda.wfm.topology.flowhs.service;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,12 +27,15 @@ import org.openkilda.floodlight.api.response.SpeakerFlowSegmentResponse;
 import org.openkilda.messaging.Message;
 import org.openkilda.messaging.error.ErrorMessage;
 import org.openkilda.messaging.error.ErrorType;
+import org.openkilda.messaging.info.InfoData;
+import org.openkilda.messaging.info.InfoMessage;
+import org.openkilda.messaging.info.flow.FlowResponse;
 import org.openkilda.model.Cookie;
 import org.openkilda.model.FeatureToggles;
 import org.openkilda.model.Flow;
-import org.openkilda.model.FlowEncapsulationType;
 import org.openkilda.model.FlowEndpoint;
 import org.openkilda.model.FlowStatus;
+import org.openkilda.model.IslEndpoint;
 import org.openkilda.model.SwitchId;
 import org.openkilda.pce.PathComputer;
 import org.openkilda.persistence.Neo4jBasedTest;
@@ -37,22 +43,23 @@ import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.TransactionCallback;
 import org.openkilda.persistence.TransactionCallbackWithoutResult;
 import org.openkilda.persistence.TransactionManager;
-import org.openkilda.persistence.dummy.PersistenceEntityDummyFactory;
+import org.openkilda.persistence.dummy.IslDirectionalReference;
 import org.openkilda.persistence.repositories.FeatureTogglesRepository;
 import org.openkilda.persistence.repositories.FlowPathRepository;
 import org.openkilda.persistence.repositories.FlowRepository;
 import org.openkilda.persistence.repositories.IslRepository;
-import org.openkilda.persistence.repositories.RepositoryFactory;
+import org.openkilda.wfm.share.flow.resources.FlowResourcesConfig;
 import org.openkilda.wfm.share.flow.resources.FlowResourcesManager;
+import org.openkilda.wfm.share.model.IslReference;
 
 import lombok.SneakyThrows;
 import net.jodah.failsafe.Failsafe;
 import net.jodah.failsafe.RetryPolicy;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
 
 import java.util.ArrayDeque;
@@ -62,12 +69,13 @@ import java.util.Optional;
 import java.util.Queue;
 
 public abstract class AbstractFlowTest extends Neo4jBasedTest {
-    protected static PersistenceEntityDummyFactory dummyFactory;
-
     protected static final SwitchId SWITCH_1 = new SwitchId(1);
     protected static final SwitchId SWITCH_2 = new SwitchId(2);
 
+    private FlowRepository flowRepositorySpy = null;
     private FlowPathRepository flowPathRepositorySpy = null;
+
+    protected FlowResourcesManager flowResourcesManager = null;
 
     @Mock
     PersistenceManager persistenceManagerMock;
@@ -86,11 +94,6 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
 
     final Queue<FlowSegmentRequest> requests = new ArrayDeque<>();
     final Map<SwitchId, Map<Cookie, FlowSegmentRequest>> installedSegments = new HashMap<>();
-
-    @BeforeClass
-    public static void beforeClass() {
-        dummyFactory = new PersistenceEntityDummyFactory(persistenceManager);
-    }
 
     @Before
     public void before() {
@@ -132,6 +135,9 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
                         .deleteFlowEnabled(true)
                         .build()
         ));
+
+        FlowResourcesConfig resourceConfig = configurationProvider.getConfiguration(FlowResourcesConfig.class);
+        flowResourcesManager = spy(new FlowResourcesManager(persistenceManager, resourceConfig));
 
         alterFeatureToggles(true, true, true);
     }
@@ -177,6 +183,14 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
                         "Flow %s not found in persistent storage", flowId)));
     }
 
+    protected FlowRepository setupFlowRepositorySpy() {
+        if (flowRepositorySpy == null) {
+            flowRepositorySpy = spy(persistenceManager.getRepositoryFactory().createFlowRepository());
+            when(repositoryFactorySpy.createFlowRepository()).thenReturn(flowRepositorySpy);
+        }
+        return flowRepositorySpy;
+    }
+
     protected FlowPathRepository setupFlowPathRepositorySpy() {
         if (flowPathRepositorySpy == null) {
             flowPathRepositorySpy = spy(persistenceManager.getRepositoryFactory().createFlowPathRepository());
@@ -185,7 +199,25 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
         return flowPathRepositorySpy;
     }
 
-    protected void verifyNorthboundResponseType(FlowGenericCarrier carrierMock, ErrorType expectedErrorType) {
+    protected Flow verifyFlowStatus(String flowId, FlowStatus expectedStatus) {
+        Flow flow = fetchFlow(flowId);
+        assertEquals(expectedStatus, flow.getStatus());
+        return flow;
+    }
+
+    protected void verifyNorthboundSuccessResponse(FlowGenericCarrier carrierMock) {
+        ArgumentCaptor<Message> responseCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(carrierMock).sendNorthboundResponse(responseCaptor.capture());
+
+        Message rawResponse = responseCaptor.getValue();
+        Assert.assertNotNull(rawResponse);
+        Assert.assertTrue(rawResponse instanceof InfoMessage);
+
+        InfoData rawPayload = ((InfoMessage) rawResponse).getData();
+        Assert.assertTrue(rawPayload instanceof FlowResponse);
+    }
+
+    protected void verifyNorthboundErrorResponse(FlowGenericCarrier carrierMock, ErrorType expectedErrorType) {
         ArgumentCaptor<Message> responseCaptor = ArgumentCaptor.forClass(Message.class);
         verify(carrierMock).sendNorthboundResponse(responseCaptor.capture());
 
@@ -220,7 +252,11 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
     protected Flow make2SwitchFlow() {
         FlowEndpoint aEnd = new FlowEndpoint(SWITCH_1, 10, 100);
         FlowEndpoint zEnd = new FlowEndpoint(SWITCH_2, 20, 200);
-        return dummyFactory.makeFlow(aEnd, zEnd);
+        return dummyFactory.makeFlow(
+                aEnd, zEnd,
+                new IslDirectionalReference(
+                        new IslEndpoint(aEnd.getSwitchId(), 11),
+                        new IslEndpoint(zEnd.getSwitchId(), 21)));
     }
 
     protected void flushFlowChanges(Flow flow) {

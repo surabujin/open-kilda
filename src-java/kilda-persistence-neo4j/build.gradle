@@ -3,6 +3,7 @@ dependencies {
     implementation project(':kilda-model')
     implementation project(':kilda-persistence-api')
     implementation project(':kilda-configuration')
+    testImplementation project(path: ':kilda-persistence-api', configuration: 'testArtifacts')
 
     implementation 'org.neo4j:neo4j-ogm-core'
     implementation 'org.neo4j:neo4j-ogm-bolt-driver'
