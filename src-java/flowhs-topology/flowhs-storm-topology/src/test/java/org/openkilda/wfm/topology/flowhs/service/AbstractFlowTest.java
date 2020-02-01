@@ -34,6 +34,8 @@ import org.openkilda.model.Cookie;
 import org.openkilda.model.FeatureToggles;
 import org.openkilda.model.Flow;
 import org.openkilda.model.FlowEndpoint;
+import org.openkilda.model.FlowPath;
+import org.openkilda.model.FlowPathStatus;
 import org.openkilda.model.FlowStatus;
 import org.openkilda.model.IslEndpoint;
 import org.openkilda.model.SwitchId;
@@ -203,6 +205,13 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
         Flow flow = fetchFlow(flowId);
         assertEquals(expectedStatus, flow.getStatus());
         return flow;
+    }
+
+    protected void verifyFlowPathStatus(FlowPath path, FlowPathStatus expectedStatus, String name) {
+        Assert.assertNotNull(String.format("%s flow path not defined (is null)", name), path);
+        Assert.assertSame(
+                String.format("%s flow path status is invalid", name),
+                expectedStatus, path.getStatus());
     }
 
     protected void verifyNorthboundSuccessResponse(FlowGenericCarrier carrierMock) {
