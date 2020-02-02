@@ -276,6 +276,10 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
     }
 
     protected void verifyNorthboundSuccessResponse(FlowGenericCarrier carrierMock) {
+        verifyNorthboundSuccessResponse(carrierMock, FlowResponse.class);
+    }
+
+    protected void verifyNorthboundSuccessResponse(FlowGenericCarrier carrierMock, Class<?> expectedPayloadType) {
         ArgumentCaptor<Message> responseCaptor = ArgumentCaptor.forClass(Message.class);
         verify(carrierMock).sendNorthboundResponse(responseCaptor.capture());
 
@@ -284,7 +288,7 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
         Assert.assertTrue(rawResponse instanceof InfoMessage);
 
         InfoData rawPayload = ((InfoMessage) rawResponse).getData();
-        Assert.assertTrue(rawPayload instanceof FlowResponse);
+        Assert.assertTrue(expectedPayloadType.isInstance(rawPayload));
     }
 
     protected void verifyNorthboundErrorResponse(FlowGenericCarrier carrier, ErrorType expectedErrorType) {
@@ -301,6 +305,16 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
 
     protected void verifyNoSpeakerInteraction(FlowGenericCarrier carrier) {
         verify(carrier, never()).sendSpeakerRequest(any());
+    }
+
+    protected void verifyNoPathReplace(Flow origin, Flow result) {
+        Assert.assertEquals(origin.getForwardPathId(), result.getForwardPathId());
+        Assert.assertEquals(origin.getReversePathId(), result.getReversePathId());
+    }
+
+    protected void verifyPathReplace(Flow origin, Flow result) {
+        Assert.assertNotEquals(origin.getForwardPathId(), result.getForwardPathId());
+        Assert.assertNotEquals(origin.getReversePathId(), result.getReversePathId());
     }
 
     protected void alterFeatureToggles(Boolean isCreateAllowed, Boolean isUpdateAllowed, Boolean isDeleteAllowed) {

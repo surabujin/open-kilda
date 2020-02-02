@@ -560,16 +560,6 @@ public class FlowUpdateServiceTest extends AbstractFlowTest {
         when(pathComputer.getPath(makeFlowArgumentMatch(flowId), any())).thenReturn(pathPair);
     }
 
-    private void verifyNoPathReplace(Flow origin, Flow result) {
-        Assert.assertEquals(origin.getForwardPathId(), result.getForwardPathId());
-        Assert.assertEquals(origin.getReversePathId(), result.getReversePathId());
-    }
-
-    private void verifyPathReplace(Flow origin, Flow result) {
-        Assert.assertNotEquals(origin.getForwardPathId(), result.getForwardPathId());
-        Assert.assertNotEquals(origin.getReversePathId(), result.getReversePathId());
-    }
-
     private FlowUpdateService makeService() {
         return new FlowUpdateService(carrier, persistenceManager,
                 pathComputer, flowResourcesManager, TRANSACTION_RETRIES_LIMIT,
