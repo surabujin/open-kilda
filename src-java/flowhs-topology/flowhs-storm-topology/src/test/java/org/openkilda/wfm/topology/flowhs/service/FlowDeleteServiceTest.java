@@ -16,43 +16,25 @@
 package org.openkilda.wfm.topology.flowhs.service;
 
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import org.openkilda.floodlight.api.request.FlowSegmentRequest;
 import org.openkilda.floodlight.api.response.SpeakerFlowSegmentResponse;
 import org.openkilda.floodlight.flow.response.FlowErrorResponse;
 import org.openkilda.floodlight.flow.response.FlowErrorResponse.ErrorCode;
 import org.openkilda.messaging.error.ErrorType;
-import org.openkilda.model.Cookie;
 import org.openkilda.model.Flow;
-import org.openkilda.model.FlowEncapsulationType;
 import org.openkilda.model.FlowPath;
-import org.openkilda.model.FlowPathStatus;
 import org.openkilda.model.FlowStatus;
-import org.openkilda.model.MeterId;
-import org.openkilda.model.PathId;
-import org.openkilda.model.PathSegment;
-import org.openkilda.model.Switch;
-import org.openkilda.model.TransitVlan;
 import org.openkilda.persistence.RecoverablePersistenceException;
 import org.openkilda.persistence.repositories.FlowPathRepository;
 import org.openkilda.persistence.repositories.FlowRepository;
-import org.openkilda.persistence.repositories.IslRepository;
 import org.openkilda.persistence.repositories.RepositoryFactory;
-import org.openkilda.persistence.repositories.history.FlowEventRepository;
-import org.openkilda.wfm.CommandContext;
-import org.openkilda.wfm.share.flow.resources.FlowResources;
 import org.openkilda.wfm.share.flow.resources.FlowResources.PathResources;
-import org.openkilda.wfm.share.flow.resources.transitvlan.TransitVlanEncapsulation;
 
 import org.hamcrest.Matchers;
 import org.junit.Assert;
@@ -60,25 +42,16 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.hamcrest.MockitoHamcrest;
 import org.mockito.junit.MockitoJUnitRunner;
-
-import java.util.Collections;
-import java.util.Optional;
 
 @RunWith(MockitoJUnitRunner.class)
 public class FlowDeleteServiceTest extends AbstractFlowTest {
     private static final int TRANSACTION_RETRIES_LIMIT = 3;
     private static final int SPEAKER_COMMAND_RETRIES_LIMIT = 3;
 
-    private final String dummyRequestKey = "test-key";
-    private final String injectedErrorMessage = "Unit-test injected failure";
-
     @Mock
     private FlowDeleteHubCarrier carrier;
-
-    private CommandContext commandContext = new CommandContext();
 
     @Before
     public void setUp() {
@@ -99,26 +72,26 @@ public class FlowDeleteServiceTest extends AbstractFlowTest {
 
         makeService().handleRequest(dummyRequestKey, commandContext, flowId);
 
-        verify(carrier, never()).sendSpeakerRequest(any());
+        verifyNoSpeakerInteraction(carrier);
         verifyNorthboundErrorResponse(carrier, ErrorType.NOT_FOUND);
     }
 
     @Test
     public void shouldFailDeleteFlowOnLockedFlow() {
-        Flow flow = make2SwitchFlow();
+        Flow flow = makeFlow();
         flow.setStatus(FlowStatus.IN_PROGRESS);
         flushFlowChanges(flow);
 
         makeService().handleRequest(dummyRequestKey, commandContext, flow.getFlowId());
 
-        verify(carrier, never()).sendSpeakerRequest(any());
+        verifyNoSpeakerInteraction(carrier);
         verifyNorthboundErrorResponse(carrier, ErrorType.REQUEST_INVALID);
         verifyFlowStatus(flow.getFlowId(), FlowStatus.IN_PROGRESS);
     }
 
     @Test
     public void shouldCompleteDeleteOnLockedSwitches() {
-        String flowId = make2SwitchFlow().getFlowId();
+        String flowId = makeFlow().getFlowId();
 
         FlowPathRepository repository = setupFlowPathRepositorySpy();
         doThrow(new RecoverablePersistenceException(injectedErrorMessage))
@@ -147,12 +120,12 @@ public class FlowDeleteServiceTest extends AbstractFlowTest {
 
     @Test
     public void shouldCompleteDeleteOnUnsuccessfulSpeakerResponse() {
-        testSpeakerErrorResponse(make2SwitchFlow().getFlowId(), ErrorCode.UNKNOWN);
+        testSpeakerErrorResponse(makeFlow().getFlowId(), ErrorCode.UNKNOWN);
     }
 
     @Test
     public void shouldCompleteDeleteOnTimeoutSpeakerResponse() {
-        testSpeakerErrorResponse(make2SwitchFlow().getFlowId(), ErrorCode.OPERATION_TIMED_OUT);
+        testSpeakerErrorResponse(makeFlow().getFlowId(), ErrorCode.OPERATION_TIMED_OUT);
     }
 
     private void testSpeakerErrorResponse(String flowId, ErrorCode errorCode) {
@@ -181,7 +154,7 @@ public class FlowDeleteServiceTest extends AbstractFlowTest {
 
     @Test
     public void shouldFailDeleteOnTimeoutDuringRuleRemoval() {
-        String flowId = make2SwitchFlow().getFlowId();
+        String flowId = makeFlow().getFlowId();
 
         FlowDeleteService service = makeService();
 
@@ -193,13 +166,13 @@ public class FlowDeleteServiceTest extends AbstractFlowTest {
 
         verify(carrier, times(4)).sendSpeakerRequest(any());
         // FIXME(surabujin): flow stays in IN_PROGRESS status, any further request can't be handled.
-        //  em... there is no actual handling for timeout event, so FSM stack in memory forever
+        //  em... there is no actual handling for timeout event, so FSM will stack in memory forever
         verifyFlowStatus(flowId, FlowStatus.IN_PROGRESS);
     }
 
     @Test
     public void shouldCompleteDeleteOnErrorDuringCompletingFlowPathRemoval() {
-        Flow target = make2SwitchFlow();
+        Flow target = makeFlow();
         FlowPath forwardPath = target.getForwardPath();
         Assert.assertNotNull(forwardPath);
 
@@ -232,7 +205,7 @@ public class FlowDeleteServiceTest extends AbstractFlowTest {
 
     @Test
     public void shouldCompleteDeleteOnErrorDuringResourceDeallocation() {
-        Flow target = make2SwitchFlow();
+        Flow target = makeFlow();
         FlowPath forwardPath = target.getForwardPath();
         Assert.assertNotNull(forwardPath);
 
@@ -265,7 +238,7 @@ public class FlowDeleteServiceTest extends AbstractFlowTest {
 
     @Test
     public void shouldCompleteDeleteOnErrorDuringRemovingFlow() {
-        Flow target = make2SwitchFlow();
+        Flow target = makeFlow();
 
         FlowRepository repository = setupFlowRepositorySpy();
         doThrow(new RuntimeException(injectedErrorMessage))
@@ -297,7 +270,7 @@ public class FlowDeleteServiceTest extends AbstractFlowTest {
 
     @Test
     public void shouldSuccessfullyDeleteFlow() {
-        Flow target = make2SwitchFlow();
+        Flow target = makeFlow();
 
         FlowDeleteService service = makeService();
 
