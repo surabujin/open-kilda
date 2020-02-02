@@ -47,10 +47,6 @@ import org.openkilda.pce.Path.Segment;
 import org.openkilda.pce.PathComputer;
 import org.openkilda.pce.PathPair;
 import org.openkilda.persistence.Neo4jBasedTest;
-import org.openkilda.persistence.PersistenceManager;
-import org.openkilda.persistence.TransactionCallback;
-import org.openkilda.persistence.TransactionCallbackWithoutResult;
-import org.openkilda.persistence.TransactionManager;
 import org.openkilda.persistence.dummy.IslDirectionalReference;
 import org.openkilda.persistence.repositories.FeatureTogglesRepository;
 import org.openkilda.persistence.repositories.FlowPathRepository;
@@ -61,9 +57,6 @@ import org.openkilda.wfm.share.flow.resources.FlowResourcesConfig;
 import org.openkilda.wfm.share.flow.resources.FlowResourcesManager;
 
 import com.google.common.collect.ImmutableList;
-import lombok.SneakyThrows;
-import net.jodah.failsafe.Failsafe;
-import net.jodah.failsafe.RetryPolicy;
 import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Assert;
@@ -78,7 +71,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Queue;
 
 public abstract class AbstractFlowTest extends Neo4jBasedTest {
@@ -89,6 +81,9 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
     protected final IslDirectionalReference islSourceDest = new IslDirectionalReference(
             new IslEndpoint(SWITCH_SOURCE, 24),
             new IslEndpoint(SWITCH_DEST, 24));
+    protected final IslDirectionalReference islSourceDestAlt = new IslDirectionalReference(
+            new IslEndpoint(SWITCH_SOURCE, 30),
+            new IslEndpoint(SWITCH_DEST, 30));
     protected final IslDirectionalReference islSourceTransit = new IslDirectionalReference(
             new IslEndpoint(SWITCH_SOURCE, 25),
             new IslEndpoint(SWITCH_TRANSIT, 25));
@@ -111,64 +106,13 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
     protected CommandContext commandContext = new CommandContext();
 
     @Mock
-    PersistenceManager persistenceManagerMock;
-    @Mock
-    FlowRepository flowRepository;
-    @Mock
-    FlowPathRepository flowPathRepository;
-    @Mock
     PathComputer pathComputer;
-    @Mock
-    FlowResourcesManager flowResourcesManagerMock;
-    @Mock
-    FeatureTogglesRepository featureTogglesRepository;
-    @Mock
-    IslRepository islRepository;
 
     final Queue<FlowSegmentRequest> requests = new ArrayDeque<>();
     final Map<SwitchId, Map<Cookie, FlowSegmentRequest>> installedSegments = new HashMap<>();
 
     @Before
     public void before() {
-        when(persistenceManagerMock.getTransactionManager()).thenReturn(new TransactionManager() {
-            @SneakyThrows
-            @Override
-            public <T, E extends Throwable> T doInTransaction(TransactionCallback<T, E> action) throws E {
-                return action.doInTransaction();
-            }
-
-            @Override
-            public <T, E extends Throwable> T doInTransaction(RetryPolicy retryPolicy, TransactionCallback<T, E> action)
-                    throws E {
-                return Failsafe.with(retryPolicy).get(action::doInTransaction);
-            }
-
-            @SneakyThrows
-            @Override
-            public <E extends Throwable> void doInTransaction(TransactionCallbackWithoutResult<E> action) throws E {
-                action.doInTransaction();
-            }
-
-            @Override
-            public <E extends Throwable> void doInTransaction(RetryPolicy retryPolicy,
-                                                              TransactionCallbackWithoutResult<E> action) throws E {
-                Failsafe.with(retryPolicy).run(action::doInTransaction);
-            }
-
-            @Override
-            public RetryPolicy makeRetryPolicyBlank() {
-                return new RetryPolicy().retryIf(result -> false);
-            }
-        });
-
-        when(featureTogglesRepository.find()).thenReturn(Optional.of(
-                FeatureToggles.DEFAULTS.toBuilder()
-                        .createFlowEnabled(true)
-                        .updateFlowEnabled(true)
-                        .deleteFlowEnabled(true)
-                        .build()
-        ));
-
         FlowResourcesConfig resourceConfig = configurationProvider.getConfiguration(FlowResourcesConfig.class);
         flowResourcesManager = spy(new FlowResourcesManager(persistenceManager, resourceConfig));
 
@@ -178,7 +122,7 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
         dummyFactory.makeSwitch(SWITCH_DEST);
         dummyFactory.makeSwitch(SWITCH_TRANSIT);
         for (IslDirectionalReference reference : new IslDirectionalReference[]{
-                islSourceDest, islSourceTransit, islTransitDest}) {
+                islSourceDest, islSourceDestAlt, islSourceTransit, islTransitDest}) {
             dummyFactory.makeIsl(reference.getAEnd(), reference.getZEnd());
             dummyFactory.makeIsl(reference.getZEnd(), reference.getAEnd());
         }
@@ -364,10 +308,18 @@ public abstract class AbstractFlowTest extends Neo4jBasedTest {
     }
 
     protected PathPair make2SwitchesPathPair() {
+        return makeSourceDestPathPair(islSourceDest);
+    }
+
+    protected PathPair make2SwitchAltPathPair() {
+        return makeSourceDestPathPair(islSourceDestAlt);
+    }
+
+    private PathPair makeSourceDestPathPair(IslDirectionalReference islReference) {
         List<Segment> forwardSegments = ImmutableList.of(
-                makePathSegment(islSourceDest));
+                makePathSegment(islReference));
         List<Segment> reverseSegments = ImmutableList.of(
-                makePathSegment(islSourceDest.makeOpposite()));
+                makePathSegment(islReference.makeOpposite()));
 
         return PathPair.builder()
                 .forward(Path.builder()

@@ -64,12 +64,6 @@ public class FlowCreateServiceTest extends AbstractFlowTest {
         doAnswer(getSpeakerCommandsAnswer()).when(carrier).sendSpeakerRequest(any(FlowSegmentRequest.class));
     }
 
-    @After
-    public void reset() {
-        Mockito.reset(persistenceManagerMock, flowRepository, flowPathRepository, flowResourcesManagerMock,
-                pathComputer, carrier);
-    }
-
     @Test
     public void shouldCreateFlowWithTransitSwitches() throws Exception {
         FlowRequest request = makeRequest()
