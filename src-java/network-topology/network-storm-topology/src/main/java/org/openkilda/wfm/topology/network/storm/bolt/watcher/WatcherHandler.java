@@ -158,6 +158,10 @@ public class WatcherHandler extends AbstractBolt implements IWatcherCarrier {
         service.discovery(payload);
     }
 
+    public void processRoundTripDiscovery(Endpoint endpoint, long packetId) {
+        service.roundTripDiscovery(endpoint, packetId);
+    }
+
     // -- private/service methods --
 
     private CommandContext forkContextByEndpoint(Endpoint endpoint) {

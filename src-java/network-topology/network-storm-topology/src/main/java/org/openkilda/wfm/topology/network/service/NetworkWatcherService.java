@@ -24,7 +24,10 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -39,6 +42,8 @@ public class NetworkWatcherService {
     private Set<Packet> producedPackets = new HashSet<>();
     private Set<Packet> confirmedPackets = new HashSet<>();
     private SortedMap<Long, Set<Packet>> timeouts = new TreeMap<>();
+
+    private Map<Endpoint, Instant> lastSeenRoundTrip = new HashMap<>();
 
     public NetworkWatcherService(IWatcherCarrier carrier, long awaitTime, Integer taskId) {
         this.carrier = carrier;
@@ -133,6 +138,11 @@ public class NetworkWatcherService {
             log.error("Receive invalid or removed discovery packet on {} id:{} task:{}",
                     packet.endpoint, packet.packetNo, taskId);
         }
+    }
+
+    public void roundTripDiscovery(Endpoint endpoint, long packetId) {
+        Packet packet = Packet.of(endpoint, packetId);
+        // TODO
     }
 
     private void timeoutAction(Packet packet) {
