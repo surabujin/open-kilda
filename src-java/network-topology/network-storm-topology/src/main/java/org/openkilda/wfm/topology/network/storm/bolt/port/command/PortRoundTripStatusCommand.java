@@ -13,17 +13,21 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.network.model;
+package org.openkilda.wfm.topology.network.storm.bolt.port.command;
 
-import org.openkilda.wfm.share.model.Endpoint;
+import org.openkilda.wfm.topology.network.model.RoundTripStatus;
+import org.openkilda.wfm.topology.network.storm.bolt.port.PortHandler;
 
-import lombok.Value;
+public class PortRoundTripStatusCommand extends PortCommand {
+    private final RoundTripStatus status;
 
-import java.time.Instant;
+    public PortRoundTripStatusCommand(RoundTripStatus status) {
+        super(status.getEndpoint());
+        this.status = status;
+    }
 
-@Value
-public class RoundTripStatus {
-    private final Endpoint endpoint;
-    private final Instant lastSeen;
-    private final Instant now;
+    @Override
+    public void apply(PortHandler handler) {
+        handler.processRoundTripStatus(status);
+    }
 }
