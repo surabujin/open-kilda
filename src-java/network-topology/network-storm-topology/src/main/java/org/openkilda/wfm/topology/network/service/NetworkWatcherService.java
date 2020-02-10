@@ -21,12 +21,16 @@ import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
 
 import com.google.common.annotations.VisibleForTesting;
+import lombok.Data;
+import lombok.Getter;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
@@ -34,18 +38,26 @@ import java.util.TreeMap;
 
 @Slf4j
 public class NetworkWatcherService {
+    private final Clock clock;
+
     private final IWatcherCarrier carrier;
     private final long awaitTime;
     private final Integer taskId;
 
     private long packetNo = 0;
-    private Set<Packet> producedPackets = new HashSet<>();
-    private Set<Packet> confirmedPackets = new HashSet<>();
+    private Map<Packet, WatcherEntry> inFlightEntries = new HashMap<>();
     private SortedMap<Long, Set<Packet>> timeouts = new TreeMap<>();
 
     private Map<Endpoint, Instant> lastSeenRoundTrip = new HashMap<>();
 
+
     public NetworkWatcherService(IWatcherCarrier carrier, long awaitTime, Integer taskId) {
+        this(Clock.systemUTC(), carrier, awaitTime, taskId);
+    }
+
+    @VisibleForTesting
+    NetworkWatcherService(Clock clock, IWatcherCarrier carrier, long awaitTime, Integer taskId) {
+        this.clock = clock;
         this.carrier = carrier;
         this.awaitTime = awaitTime;
         this.taskId = taskId;
@@ -60,7 +72,7 @@ public class NetworkWatcherService {
         log.debug("Watcher service receive ADD-watch request for {} and produce packet id:{} task:{}",
                   endpoint, packet.packetNo, taskId);
 
-        producedPackets.add(packet);
+        inFlightEntries.put(packet, new WatcherEntry());
         timeouts.computeIfAbsent(currentTime + awaitTime, key -> new HashSet<>())
                 .add(packet);
 
@@ -77,8 +89,7 @@ public class NetworkWatcherService {
     public void removeWatch(Endpoint endpoint) {
         log.debug("Watcher service receive REMOVE-watch request for {}", endpoint);
         carrier.clearDiscovery(endpoint);
-        producedPackets.removeIf(packet -> packet.endpoint.equals(endpoint));
-        confirmedPackets.removeIf(packet -> packet.endpoint.equals(endpoint));
+        inFlightEntries.keySet().removeIf(packet -> packet.getEndpoint().equals(endpoint));
     }
 
     void tick(long tickTime) {
@@ -102,9 +113,10 @@ public class NetworkWatcherService {
      */
     public void confirmation(Endpoint endpoint, long packetNo) {
         log.debug("Watcher service receive SEND-confirmation for {} id:{} task:{}", endpoint, packetNo, taskId);
-        Packet packet = Packet.of(endpoint, packetNo);
-        if (producedPackets.remove(packet)) {
-            confirmedPackets.add(packet);
+
+        WatcherEntry entry = inFlightEntries.get(Packet.of(endpoint, packetNo));
+        if (entry != null) {
+            entry.markConfirmed();
         } else if (log.isDebugEnabled()) {
             log.debug("Can't find produced packet for {} id:{} task:{}", endpoint, packetNo, taskId);
         }
@@ -130,19 +142,34 @@ public class NetworkWatcherService {
                       packet.endpoint, packet.packetNo, taskId, ref);
         }
 
-        boolean wasProduced = producedPackets.remove(packet);
-        boolean wasConfirmed = confirmedPackets.remove(packet);
-        if (wasProduced || wasConfirmed) {
-            carrier.discoveryReceived(packet.endpoint, packet.packetNo, discoveryEvent, now());
-        } else {
+        WatcherEntry entry = inFlightEntries.get(packet);
+        if (entry == null) {
             log.error("Receive invalid or removed discovery packet on {} id:{} task:{}",
-                    packet.endpoint, packet.packetNo, taskId);
+                      packet.endpoint, packet.packetNo, taskId);
+        } else if (entry.isDiscovered()) {
+            log.error("Receive duplicate discovery packet on {} id:{} task:{}",
+                      packet.endpoint, packet.packetNo, taskId);
+        } else {
+            entry.markDiscovered();
+            carrier.discoveryReceived(packet.endpoint, packet.packetNo, discoveryEvent, now());
         }
     }
 
     public void roundTripDiscovery(Endpoint endpoint, long packetId) {
-        Packet packet = Packet.of(endpoint, packetId);
-        // TODO
+        log.debug("Watcher service receive ROUND TRIP DISCOVERY for {} id:{} task:{}",
+                  endpoint, packetId, taskId);
+
+        WatcherEntry entry = inFlightEntries.get(Packet.of(endpoint, packetId));
+        if (entry == null) {
+            log.error("Receive invalid/stale round trip discovery packet for {} id:{} task:{}",
+                      endpoint, packetId, taskId);
+        } else if (entry.isRoundTripDiscovered()) {
+            log.error("Receive multiple round trip discovery packet for {} id:{} task:{}",
+                      endpoint, packetId, taskId);
+        } else {
+            entry.markRoundTripDiscovered();
+            lastSeenRoundTrip.put(endpoint, clock.instant());
+        }
     }
 
     private void timeoutAction(Packet packet) {
@@ -178,5 +205,24 @@ public class NetworkWatcherService {
     public static class Packet {
         private final Endpoint endpoint;
         private final long packetNo;
+    }
+
+    @Getter
+    public static class WatcherEntry {
+        private boolean confirmed = false;
+        private boolean discovered = false;
+        private boolean roundTripDiscovered = false;
+
+        public void markConfirmed() {
+            confirmed = true;
+        }
+
+        public void markDiscovered() {
+            confirmed = discovered = true;
+        }
+
+        public void markRoundTripDiscovered() {
+            confirmed = roundTripDiscovered = true;
+        }
     }
 }
