@@ -31,6 +31,7 @@ import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmEvent;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmState;
 import org.openkilda.wfm.topology.network.model.IslDataHolder;
 import org.openkilda.wfm.topology.network.model.NetworkOptions;
+import org.openkilda.wfm.topology.network.model.RoundTripStatus;
 import org.openkilda.wfm.topology.network.storm.bolt.isl.BfdManager;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -114,6 +115,18 @@ public class NetworkIslService {
         IslFsm islFsm = locateController(reference).fsm;
         IslFsmContext context = IslFsmContext.builder(carrier, endpoint).build();
         controllerExecutor.fire(islFsm, IslFsmEvent.ISL_MOVE, context);
+    }
+
+    /**
+     * Handle round trip status notification.
+     */
+    public void roundTripStatusNotification(IslReference reference, RoundTripStatus status) {
+        log.debug("ISL service receive ROUND TRIP STATUS for {} (on {})", reference, status.getEndpoint());
+        IslFsm islFsm = locateController(reference).fsm;
+        IslFsmContext context = IslFsmContext.builder(carrier, status.getEndpoint())
+                .roundTripStatus(status)
+                .build();
+        controllerExecutor.fire(islFsm, IslFmsEvent.ROUND_TRIP_STATUS, context);
     }
 
     /**

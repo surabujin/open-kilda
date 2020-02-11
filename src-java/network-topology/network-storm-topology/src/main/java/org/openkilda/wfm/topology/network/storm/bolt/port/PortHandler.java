@@ -51,6 +51,7 @@ import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslDiscov
 import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslFailCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslPhysicalDownCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslRemoveCommand;
+import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslRoundTripStatusCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslSetupCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.watchlist.command.WatchListCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.watchlist.command.WatchListPollAddCommand;
@@ -207,7 +208,7 @@ public class PortHandler extends AbstractBolt implements IPortCarrier, IAntiFlap
 
     @Override
     public void notifyRoundTripStatus(RoundTripStatus roundTripStatus) {
-        // TODO
+        emit(getCurrentTuple(), makeDefaultTuple(new UniIslRoundTripStatusCommand(roundTripStatus)));
     }
 
     // IAntiFlapCarrier

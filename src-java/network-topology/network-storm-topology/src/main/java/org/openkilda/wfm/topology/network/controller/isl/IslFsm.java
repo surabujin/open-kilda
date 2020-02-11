@@ -51,6 +51,7 @@ import org.openkilda.wfm.topology.network.model.BiIslDataHolder;
 import org.openkilda.wfm.topology.network.model.IslDataHolder;
 import org.openkilda.wfm.topology.network.model.IslEndpointStatus;
 import org.openkilda.wfm.topology.network.model.NetworkOptions;
+import org.openkilda.wfm.topology.network.model.RoundTripStatus;
 import org.openkilda.wfm.topology.network.model.facts.DiscoveryFacts;
 import org.openkilda.wfm.topology.network.service.IIslCarrier;
 import org.openkilda.wfm.topology.network.storm.bolt.isl.BfdManager;
@@ -906,6 +907,8 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         private Endpoint removedRulesEndpoint;
         private Boolean bfdEnable;
 
+        private RoundTripStatus roundTripStatus;
+
         /**
          * .
          */
@@ -920,7 +923,8 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         NEXT,
 
         HISTORY, _HISTORY_DOWN, _HISTORY_UP, _HISTORY_MOVED,
-        ISL_UP, ISL_DOWN, ISL_MOVE,
+        ISL_UP, ISL_DOWN, ISL_MOVE, ROUND_TRIP_STATUS,
+        _BECOME_DOWN,
         _UP_ATTEMPT_SUCCESS, ISL_REMOVE, ISL_REMOVE_FINISHED, _ISL_REMOVE_SUCESS, _UP_ATTEMPT_FAIL,
         ISL_RULE_INSTALLED, ISL_RULE_INSTALL_FAILED,
         ISL_RULE_REMOVED, ISL_RULE_REMOVE_FAILED,
