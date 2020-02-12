@@ -153,8 +153,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     public void handleInitialDiscovery(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         updateLinkData(context.getEndpoint(), context.getIslData());
-        updateEndpointStatusByEvent(event, context);
-        saveStatusTransaction();
     }
 
     public void updateEndpointStatus(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
@@ -170,6 +168,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     public void downEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         reportFsm.fire(IslReportFsm.Event.BECOME_DOWN);
 
+        updateEndpointStatusByEvent(event, context);
         saveStatusTransaction();
         sendIslStatusUpdateNotification(context, IslStatus.INACTIVE);
     }
@@ -245,6 +244,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     public void movedEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         reportFsm.fire(IslReportFsm.Event.BECOME_MOVED);
 
+        updateEndpointStatusByEvent(event, context);
         saveStatusTransaction();
         sendIslStatusUpdateNotification(context, IslStatus.MOVED);
         bfdManager.disable(context.getOutput());
@@ -374,7 +374,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     }
 
     private void updateEndpointStatusByEvent(IslFsmEvent event, IslFsmContext context) {
-        IslEndpointStatus status;
+        IslEndpointStatus status = null;
         switch (event) {
             case ISL_UP:
                 status = new IslEndpointStatus(IslEndpointStatus.Status.UP);
@@ -386,10 +386,13 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                 status = new IslEndpointStatus(IslEndpointStatus.Status.MOVED);
                 break;
             default:
-                throw new IllegalStateException(String.format("Unexpected event %s for %s.handleSourceDestUpState",
-                                                              event, getClass().getName()));
+                log.debug("Ignore status update for not applicable event {} (context={}, state={})",
+                          event, context, getCurrentState());
         }
-        endpointStatus.put(context.getEndpoint(), status);
+
+        if (status != null) {
+            endpointStatus.put(context.getEndpoint(), status);
+        }
     }
 
     private void loadPersistentData(Endpoint start, Endpoint end) {
@@ -776,11 +779,9 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     .from(IslFsmState.INIT).to(IslFsmState.DOWN).on(IslFsmEvent.ISL_UP)
                     .callMethod("handleInitialDiscovery");
             builder.transition()
-                    .from(IslFsmState.INIT).to(IslFsmState.DOWN).on(IslFsmEvent.ISL_DOWN)
-                    .callMethod(updateAndPersistEndpointStatusMethod);
+                    .from(IslFsmState.INIT).to(IslFsmState.DOWN).on(IslFsmEvent.ISL_DOWN);
             builder.transition()
-                    .from(IslFsmState.INIT).to(IslFsmState.MOVED).on(IslFsmEvent.ISL_MOVE)
-                    .callMethod(updateAndPersistEndpointStatusMethod);
+                    .from(IslFsmState.INIT).to(IslFsmState.MOVED).on(IslFsmEvent.ISL_MOVE);
             builder.transition()
                     .from(IslFsmState.INIT).to(IslFsmState.DOWN).on(IslFsmEvent._HISTORY_DOWN);
             builder.transition()
@@ -797,8 +798,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     .from(IslFsmState.DOWN).to(IslFsmState.UP_ATTEMPT).on(IslFsmEvent.ISL_UP)
                     .callMethod(updateEndpointStatusMethod);
             builder.transition()
-                    .from(IslFsmState.DOWN).to(IslFsmState.MOVED).on(IslFsmEvent.ISL_MOVE)
-                    .callMethod(updateEndpointStatusMethod);
+                    .from(IslFsmState.DOWN).to(IslFsmState.MOVED).on(IslFsmEvent.ISL_MOVE);
             builder.internalTransition()
                     .within(IslFsmState.DOWN).on(IslFsmEvent.ISL_DOWN)
                     .callMethod(updateAndPersistEndpointStatusMethod);
@@ -825,8 +825,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
             builder.transition()
                     .from(IslFsmState.SET_UP_RESOURCES).to(IslFsmState.DOWN).on(IslFsmEvent.ISL_DOWN);
             builder.transition()
-                    .from(IslFsmState.SET_UP_RESOURCES).to(IslFsmState.MOVED).on(IslFsmEvent.ISL_MOVE)
-                    .callMethod(updateEndpointStatusMethod);
+                    .from(IslFsmState.SET_UP_RESOURCES).to(IslFsmState.MOVED).on(IslFsmEvent.ISL_MOVE);
             builder.transition()
                     .from(IslFsmState.SET_UP_RESOURCES).to(IslFsmState.UP).on(IslFsmEvent.ISL_UP);
             builder.internalTransition()
@@ -837,7 +836,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
             // UP
             builder.transition()
-                    .from(IslFsmState.UP).to(IslFsmState.DOWN).on(IslFsmEvent.ISL_DOWN);
+                    .from(IslFsmState.UP).to(IslFsmState.DOWN).on(IslFsmEvent._BECOME_DOWN);
             builder.transition()
                     .from(IslFsmState.UP).to(IslFsmState.MOVED).on(IslFsmEvent.ISL_MOVE);
             builder.transition()

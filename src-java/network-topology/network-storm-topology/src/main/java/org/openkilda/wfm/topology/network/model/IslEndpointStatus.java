@@ -16,16 +16,20 @@
 package org.openkilda.wfm.topology.network.model;
 
 import org.openkilda.model.IslDownReason;
+import org.openkilda.model.IslStatus;
 
 import lombok.Data;
-import lombok.Getter;
+
+import java.time.Instant;
 
 @Data
 public class IslEndpointStatus {
-    @Getter
     private Status status;
 
-    @Getter
+    private Instant roundTripExpireAt;
+
+    private IslStatus roundTripStatusStored;
+
     private IslDownReason downReason;
 
     private boolean hasIslRules;

@@ -27,7 +27,7 @@ title ISL FSM
 [*] --> INIT
 
 INIT --> DOWN : isl-up\nisl-down\nhistory [history-down]
-INIT --> SET_UP_RESOURCES : history [history-up]\n/ apply-history\n/ emit bisl-bfd-enable
+INIT --> SET_UP_RESOURCES : history [history-up]\n/ apply-history
 INIT --> MOVED : history [history-moved]\nisl-move
 
 state upAttempt <<choice>>
