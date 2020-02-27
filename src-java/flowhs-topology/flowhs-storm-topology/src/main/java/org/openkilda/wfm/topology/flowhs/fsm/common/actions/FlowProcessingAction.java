@@ -47,10 +47,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.squirrelframework.foundation.fsm.AnonymousAction;
 
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -172,16 +170,15 @@ public abstract class FlowProcessingAction<T extends FlowProcessingFsm<T, S, E, 
     private void removeSharedOfFlowsReferences(
             SharedOfFlowManager sharedOfFlowManager, FlowPathSnapshot.FlowPathSnapshotBuilder pathSnapshot,
             FlowPath path) {
-        Set<SharedOfFlow> pathSharedFlowReferences = new HashSet<>(path.getSharedOfFlows());
-        for (SharedOfFlow reference : pathSharedFlowReferences) {
+        for (SharedOfFlow reference : path.getSharedOfFlows()) {
             SharedOfFlowStatus status = sharedOfFlowManager.removeBinding(reference, path);
             log.debug(
                     "Evaluate status of shared OF flow for path {} for reference {} - {}",
                     path.getPathId(), reference, status);
-            if (reference.getType() == SharedOfFlow.SharedOfFlowType.INGRESS_OUTER_VLAN_MATCH) {
-                pathSnapshot.sharedIngressSegmentOuterVlanMatchStatus(status);
-            } else {
-                log.error("Unknown shared OF Flow type {} - {}", reference.getType(), reference);
+            try {
+                pathSnapshot.sharedOfReference(reference.getType(), status);
+            } catch (IllegalArgumentException e) {
+                log.error("Corrupted persistent data for flow path {} - {}", path.getPathId(), e.getMessage());
             }
         }
     }

@@ -52,7 +52,7 @@ public class RemoveRulesAction extends FlowProcessingAction<FlowDeleteFsm, State
     public RemoveRulesAction(PersistenceManager persistenceManager, FlowResourcesManager resourcesManager) {
         super(persistenceManager);
         this.resourcesManager = resourcesManager;
-        commandBuilderFactory = new FlowCommandBuilderFactory(resourcesManager);
+        commandBuilderFactory = new FlowCommandBuilderFactory();
     }
 
     @Override

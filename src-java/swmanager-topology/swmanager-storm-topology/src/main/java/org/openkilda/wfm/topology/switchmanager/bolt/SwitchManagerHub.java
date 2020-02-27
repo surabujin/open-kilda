@@ -15,6 +15,8 @@
 
 package org.openkilda.wfm.topology.switchmanager.bolt;
 
+import org.openkilda.floodlight.api.request.FlowSegmentRequest;
+import org.openkilda.floodlight.api.response.SpeakerResponse;
 import org.openkilda.messaging.Message;
 import org.openkilda.messaging.command.CommandData;
 import org.openkilda.messaging.command.CommandMessage;
@@ -24,7 +26,6 @@ import org.openkilda.messaging.command.switches.SwitchValidateRequest;
 import org.openkilda.messaging.error.ErrorMessage;
 import org.openkilda.messaging.info.InfoData;
 import org.openkilda.messaging.info.InfoMessage;
-import org.openkilda.messaging.info.flow.FlowInstallResponse;
 import org.openkilda.messaging.info.flow.FlowReinstallResponse;
 import org.openkilda.messaging.info.flow.FlowRemoveResponse;
 import org.openkilda.messaging.info.meter.SwitchMeterData;
@@ -37,11 +38,12 @@ import org.openkilda.messaging.info.switches.SwitchRulesResponse;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.wfm.error.PipelineException;
 import org.openkilda.wfm.share.flow.resources.FlowResourcesConfig;
+import org.openkilda.wfm.share.flow.resources.FlowResourcesManager;
 import org.openkilda.wfm.share.hubandspoke.HubBolt;
 import org.openkilda.wfm.share.utils.KeyProvider;
 import org.openkilda.wfm.topology.switchmanager.StreamType;
 import org.openkilda.wfm.topology.switchmanager.SwitchManagerTopologyConfig;
-import org.openkilda.wfm.topology.switchmanager.model.ValidationResult;
+import org.openkilda.wfm.topology.switchmanager.model.SwitchValidationContext;
 import org.openkilda.wfm.topology.switchmanager.service.SwitchManagerCarrier;
 import org.openkilda.wfm.topology.switchmanager.service.SwitchRuleService;
 import org.openkilda.wfm.topology.switchmanager.service.SwitchSyncService;
@@ -49,6 +51,7 @@ import org.openkilda.wfm.topology.switchmanager.service.SwitchValidateService;
 import org.openkilda.wfm.topology.switchmanager.service.impl.SwitchRuleServiceImpl;
 import org.openkilda.wfm.topology.switchmanager.service.impl.SwitchSyncServiceImpl;
 import org.openkilda.wfm.topology.switchmanager.service.impl.SwitchValidateServiceImpl;
+import org.openkilda.wfm.topology.switchmanager.service.impl.ValidationServiceImpl;
 import org.openkilda.wfm.topology.utils.MessageKafkaTranslator;
 
 import org.apache.storm.task.OutputCollector;
@@ -62,7 +65,6 @@ import java.util.Map;
 
 public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
     public static final String ID = "switch.manager.hub";
-    public static final String INCOME_STREAM = "switch.manage.command";
 
     private final PersistenceManager persistenceManager;
     private final FlowResourcesConfig flowResourcesConfig;
@@ -83,8 +85,11 @@ public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
     @Override
     public void prepare(Map stormConf, TopologyContext context, OutputCollector collector) {
         super.prepare(stormConf, context, collector);
-        validateService = new SwitchValidateServiceImpl(this, persistenceManager);
-        syncService = new SwitchSyncServiceImpl(this, persistenceManager, flowResourcesConfig);
+
+        validateService = new SwitchValidateServiceImpl(
+                this, persistenceManager, new ValidationServiceImpl(
+                persistenceManager, topologyConfig, new FlowResourcesManager(persistenceManager, flowResourcesConfig)));
+        syncService = new SwitchSyncServiceImpl(this);
         switchRuleService = new SwitchRuleServiceImpl(this, persistenceManager.getRepositoryFactory());
 
     }
@@ -96,7 +101,7 @@ public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
 
         CommandData data = message.getData();
         if (data instanceof SwitchValidateRequest) {
-            validateService.handleSwitchValidateRequest(key, (SwitchValidateRequest) data);
+            validateService.handleSwitchValidateRequest(getCommandContext(), key, (SwitchValidateRequest) data);
         } else if (data instanceof SwitchRulesDeleteRequest) {
             switchRuleService.deleteRules(key, (SwitchRulesDeleteRequest) data);
         } else if (data instanceof SwitchRulesInstallRequest) {
@@ -119,8 +124,18 @@ public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
     @Override
     protected void onWorkerResponse(Tuple input) throws PipelineException {
         String key = KeyProvider.getParentKey(input.getStringByField(MessageKafkaTranslator.FIELD_ID_KEY));
-        Message message = pullValue(input, MessageKafkaTranslator.FIELD_ID_PAYLOAD, Message.class);
+        Object payload = pullValue(input, MessageKafkaTranslator.FIELD_ID_PAYLOAD, Object.class);
 
+        if (payload instanceof Message) {
+            onWorkerResponse(key, (Message) payload);
+        } else if (payload instanceof SpeakerResponse) {
+            onWorkerResponse(key, (SpeakerResponse) payload);
+        } else {
+            unhandledInput(input);
+        }
+    }
+
+    private void onWorkerResponse(String key, Message message) {
         if (message instanceof InfoMessage) {
             InfoData data = ((InfoMessage) message).getData();
             if (data instanceof SwitchFlowEntries) {
@@ -129,8 +144,6 @@ public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
                 validateService.handleExpectedDefaultFlowEntriesResponse(key, (SwitchExpectedDefaultFlowEntries) data);
             } else if (data instanceof SwitchMeterData) {
                 handleMetersResponse(key, (SwitchMeterData) data);
-            } else if (data instanceof FlowInstallResponse) {
-                syncService.handleInstallRulesResponse(key);
             } else if (data instanceof FlowRemoveResponse) {
                 syncService.handleRemoveRulesResponse(key);
             } else if (data instanceof FlowReinstallResponse) {
@@ -149,6 +162,10 @@ public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
         }
     }
 
+    private void onWorkerResponse(String key, SpeakerResponse response) {
+        syncService.handleSpeakerResponse(key, response);
+    }
+
     @Override
     public void onTimeout(String key, Tuple tuple) {
         log.warn("Receive TaskTimeout for key {}", key);
@@ -163,8 +180,12 @@ public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
 
     @Override
     public void sendCommandToSpeaker(String key, CommandData command) {
-        emitWithContext(SpeakerWorkerBolt.INCOME_STREAM, getCurrentTuple(),
-                new Values(KeyProvider.generateChainedKey(key), command));
+        emit(SpeakerWorkerBolt.INCOME_STREAM, getCurrentTuple(), makeWorkerTuple(key, command));
+    }
+
+    @Override
+    public void sendCommandToSpeaker(String key, FlowSegmentRequest request) {
+        emit(SpeakerWorkerBolt.INCOME_STREAM, getCurrentTuple(), makeWorkerTuple(key, request));
     }
 
     @Override
@@ -173,13 +194,8 @@ public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
     }
 
     @Override
-    public void runSwitchSync(String key, SwitchValidateRequest request, ValidationResult validationResult) {
-        syncService.handleSwitchSync(key, request, validationResult);
-    }
-
-    @Override
-    public SwitchManagerTopologyConfig getTopologyConfig() {
-        return topologyConfig;
+    public void runSwitchSync(String key, SwitchValidateRequest request, SwitchValidationContext validationContext) {
+        syncService.handleSwitchSync(key, request, validationContext);
     }
 
     @Override
@@ -189,5 +205,9 @@ public class SwitchManagerHub extends HubBolt implements SwitchManagerCarrier {
 
         Fields fields = new Fields(MessageKafkaTranslator.FIELD_ID_KEY, MessageKafkaTranslator.FIELD_ID_PAYLOAD);
         declarer.declareStream(StreamType.TO_NORTHBOUND.toString(), fields);
+    }
+
+    private Values makeWorkerTuple(String key, Object payload) {
+        return new Values(KeyProvider.generateChainedKey(key), payload, getCommandContext());
     }
 }

@@ -33,7 +33,7 @@ import java.util.UUID;
 @Getter
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-public class OneSwitchFlowRequest extends IngressFlowSegmentBase {
+public abstract class OneSwitchFlowRequest extends IngressFlowSegmentBase {
     @JsonProperty("egress_endpoint")
     protected final FlowEndpoint egressEndpoint;
 
@@ -56,5 +56,10 @@ public class OneSwitchFlowRequest extends IngressFlowSegmentBase {
         this(
                 other.messageContext, commandId, other.metadata, other.endpoint, other.meterConfig,
                 other.egressEndpoint, other.removeCustomerPortSharedCatchRule);
+    }
+
+    @Override
+    public void handle(FlowSegmentRequestHandler handler) {
+        handler.handleFlowSegmentRequest(this);
     }
 }

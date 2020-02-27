@@ -58,4 +58,9 @@ public abstract class IngressFlowSegmentRequest extends IngressFlowSegmentBase {
                 other.messageContext, commandId, other.metadata, other.endpoint, other.meterConfig,
                 other.egressSwitchId, other.islPort, other.encapsulation, other.removeCustomerPortSharedCatchRule);
     }
+
+    @Override
+    public void handle(FlowSegmentRequestHandler handler) {
+        handler.handleFlowSegmentRequest(this);
+    }
 }
