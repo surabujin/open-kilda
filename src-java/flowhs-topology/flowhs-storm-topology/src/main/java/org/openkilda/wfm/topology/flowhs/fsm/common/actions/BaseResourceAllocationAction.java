@@ -44,6 +44,7 @@ import org.openkilda.wfm.share.history.model.FlowDumpData;
 import org.openkilda.wfm.share.history.model.FlowDumpData.DumpType;
 import org.openkilda.wfm.share.logger.FlowOperationsDashboardLogger;
 import org.openkilda.wfm.share.mappers.HistoryMapper;
+import org.openkilda.wfm.share.model.FlowPathSpeakerView;
 import org.openkilda.wfm.topology.flow.model.FlowPathPair;
 import org.openkilda.wfm.topology.flowhs.fsm.common.FlowPathSwappingFsm;
 import org.openkilda.wfm.topology.flowhs.service.FlowPathBuilder;
@@ -103,7 +104,7 @@ public abstract class BaseResourceAllocationAction<T extends FlowPathSwappingFsm
             allocateInTransaction(stateMachine);
 
             return Optional.empty();
-        } catch (UnroutableFlowException  ex) {
+        } catch (UnroutableFlowException ex) {
             String errorMessage = format("Not enough bandwidth or no path found. %s", ex.getMessage());
             stateMachine.saveActionToHistory(errorMessage);
             stateMachine.fireNoPathFound(errorMessage);
@@ -265,5 +266,38 @@ public abstract class BaseResourceAllocationAction<T extends FlowPathSwappingFsm
                 format("The flow paths %s / %s were created (with allocated resources)",
                         newFlowPaths.getForward().getPathId(), newFlowPaths.getReverse().getPathId()),
                 dumpData);
+    }
+
+    protected void flushPathChanges(FlowPathPair pathPair) {
+        flowPathRepository.createOrUpdate(pathPair.getForward());
+        flowPathRepository.createOrUpdate(pathPair.getReverse());
+    }
+
+    protected void savePrimaryPaths(
+            FlowPathSwappingFsm<?, ?, ?, ?> stateMachine, Flow flow, FlowPathPair newPaths, FlowResources flowResources)
+            throws ResourceAllocationException {
+        stateMachine.setNewPrimaryForwardPath(makeFlowPathNewView(
+                newPaths.getForward(), flowResources.getForward()));
+        stateMachine.setNewPrimaryReversePath(makeFlowPathNewView(
+                newPaths.getReverse(), flowResources.getReverse()));
+    }
+
+    protected void saveProtectedPaths(
+            FlowPathSwappingFsm<?, ?, ?, ?> stateMachine, Flow flow, FlowPathPair newPaths, FlowResources flowResources)
+            throws ResourceAllocationException {
+        // Process shared resources for protected paths in same way as it done for primary paths. So they will be
+        // available if we will swap paths.
+        stateMachine.setNewProtectedForwardPath(makeFlowPathNewView(
+                newPaths.getForward(), flowResources.getForward()));
+        stateMachine.setNewProtectedReversePath(makeFlowPathNewView(
+                newPaths.getReverse(), flowResources.getReverse()));
+    }
+
+    protected FlowPath extractPath(Flow flow, FlowPathSpeakerView pathSnapshot, FlowPath fallback) {
+        Optional<FlowPath> path = Optional.empty();
+        if (pathSnapshot != null) {
+            path = flow.getPath(pathSnapshot.getPath().getPathId());
+        }
+        return path.orElse(fallback);
     }
 }

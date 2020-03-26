@@ -23,6 +23,7 @@ import org.openkilda.model.PathId;
 import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.CommandContext;
 import org.openkilda.wfm.share.flow.resources.FlowResources;
+import org.openkilda.wfm.share.model.FlowPathSpeakerView;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -42,21 +43,23 @@ public abstract class FlowPathSwappingFsm<T extends NbTrackableFsm<T, S, E, C>, 
 
     protected final String flowId;
 
+    // TODO - ensure usage
     protected FlowResources newPrimaryResources;
     protected FlowResources newProtectedResources;
-    protected PathId newPrimaryForwardPath;
-    protected PathId newPrimaryReversePath;
-    protected PathId newProtectedForwardPath;
-    protected PathId newProtectedReversePath;
+
+    protected FlowPathSpeakerView newPrimaryForwardPath;
+    protected FlowPathSpeakerView newPrimaryReversePath;
+    protected FlowPathSpeakerView newProtectedForwardPath;
+    protected FlowPathSpeakerView newProtectedReversePath;
 
     protected final Collection<FlowResources> oldResources = new ArrayList<>();
-    protected PathId oldPrimaryForwardPath;
+    protected FlowPathSpeakerView oldPrimaryForwardPath;
     protected FlowPathStatus oldPrimaryForwardPathStatus;
-    protected PathId oldPrimaryReversePath;
+    protected FlowPathSpeakerView oldPrimaryReversePath;
     protected FlowPathStatus oldPrimaryReversePathStatus;
-    protected PathId oldProtectedForwardPath;
+    protected FlowPathSpeakerView oldProtectedForwardPath;
     protected FlowPathStatus oldProtectedForwardPathStatus;
-    protected PathId oldProtectedReversePath;
+    protected FlowPathSpeakerView oldProtectedReversePath;
     protected FlowPathStatus oldProtectedReversePathStatus;
 
     protected final Map<UUID, SwitchId> pendingCommands = new HashMap<>();

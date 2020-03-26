@@ -48,13 +48,13 @@ public class RevertPathsSwapAction extends FlowProcessingAction<FlowRerouteFsm, 
             flow.setPathComputationStrategy(stateMachine.getOriginalPathComputationStrategy());
 
             if (stateMachine.getOldPrimaryForwardPath() != null && stateMachine.getOldPrimaryReversePath() != null) {
-                FlowPath oldForward = getFlowPath(stateMachine.getOldPrimaryForwardPath());
+                FlowPath oldForward = injectActualFlowPath(stateMachine.getOldPrimaryForwardPath()).getPath();
                 if (oldForward.getStatus() != FlowPathStatus.ACTIVE) {
                     flowPathRepository.updateStatus(oldForward.getPathId(),
                             stateMachine.getOldPrimaryForwardPathStatus());
                 }
 
-                FlowPath oldReverse = getFlowPath(stateMachine.getOldPrimaryReversePath());
+                FlowPath oldReverse = injectActualFlowPath(stateMachine.getOldPrimaryReversePath()).getPath();
                 if (oldReverse.getStatus() != FlowPathStatus.ACTIVE) {
                     flowPathRepository.updateStatus(oldReverse.getPathId(),
                             stateMachine.getOldPrimaryReversePathStatus());
@@ -72,13 +72,13 @@ public class RevertPathsSwapAction extends FlowProcessingAction<FlowRerouteFsm, 
 
             if (stateMachine.getOldProtectedForwardPath() != null
                     && stateMachine.getOldProtectedReversePath() != null) {
-                FlowPath oldForward = getFlowPath(stateMachine.getOldProtectedForwardPath());
+                FlowPath oldForward = injectActualFlowPath(stateMachine.getOldProtectedForwardPath()).getPath();
                 if (oldForward.getStatus() != FlowPathStatus.ACTIVE) {
                     flowPathRepository.updateStatus(oldForward.getPathId(),
                             stateMachine.getOldProtectedForwardPathStatus());
                 }
 
-                FlowPath oldReverse = getFlowPath(stateMachine.getOldProtectedReversePath());
+                FlowPath oldReverse = injectActualFlowPath(stateMachine.getOldProtectedReversePath()).getPath();
                 if (oldReverse.getStatus() != FlowPathStatus.ACTIVE) {
                     flowPathRepository.updateStatus(oldReverse.getPathId(),
                             stateMachine.getOldProtectedReversePathStatus());
