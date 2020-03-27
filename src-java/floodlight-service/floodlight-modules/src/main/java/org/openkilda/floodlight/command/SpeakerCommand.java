@@ -27,6 +27,8 @@ import org.openkilda.floodlight.command.flow.ingress.OneSwitchFlowVerifyCommand;
 import org.openkilda.floodlight.command.flow.transit.TransitFlowSegmentInstallCommand;
 import org.openkilda.floodlight.command.flow.transit.TransitFlowSegmentRemoveCommand;
 import org.openkilda.floodlight.command.flow.transit.TransitFlowSegmentVerifyCommand;
+import org.openkilda.floodlight.command.poc.HalfSizeMetadataCheckInstallCommand;
+import org.openkilda.floodlight.command.poc.HalfSizeMetadataCheckRemoveCommand;
 import org.openkilda.floodlight.error.SessionErrorResponseException;
 import org.openkilda.floodlight.error.SwitchNotFoundException;
 import org.openkilda.floodlight.service.session.SessionService;
@@ -79,7 +81,11 @@ import java.util.concurrent.CompletionException;
         @Type(value = EgressFlowSegmentRemoveCommand.class,
                 name = "org.openkilda.floodlight.api.request.EgressFlowSegmentRemoveRequest"),
         @Type(value = EgressFlowSegmentVerifyCommand.class,
-                name = "org.openkilda.floodlight.api.request.EgressFlowSegmentVerifyRequest")
+                name = "org.openkilda.floodlight.api.request.EgressFlowSegmentVerifyRequest"),
+        @Type(value = HalfSizeMetadataCheckInstallCommand.class,
+                name = "org.openkilda.floodlight.api.request.poc.HalfSizeMetadataCheckInstallRequest"),
+        @Type(value = HalfSizeMetadataCheckRemoveCommand.class,
+                name = "org.openkilda.floodlight.api.request.poc.HalfSizeMetadataCheckRemoveRequest")
 })
 @Getter
 public abstract class SpeakerCommand<T extends SpeakerCommandReport> {
