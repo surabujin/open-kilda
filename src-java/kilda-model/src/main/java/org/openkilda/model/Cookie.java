@@ -15,13 +15,18 @@
 
 package org.openkilda.model;
 
+import org.openkilda.exception.InvalidCookieException;
+import org.openkilda.model.bitops.BitField;
+import org.openkilda.model.bitops.NumericEnumField;
 import org.openkilda.model.bitops.cookie.CookieSchema.CookieType;
 import org.openkilda.model.bitops.cookie.ServiceCookieSchema;
 import org.openkilda.model.bitops.cookie.ServiceCookieSchema.ServiceCookieTag;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.Value;
 
 import java.io.Serializable;
@@ -46,7 +51,6 @@ import java.io.Serializable;
  * 5 - Multi-table customer flow rule for ingress table pass-through
  * </p>
  */
-@Value
 @EqualsAndHashCode(of = {"value"})
 public class Cookie implements Comparable<Cookie>, Serializable {
     private static final long serialVersionUID = 1L;
@@ -101,11 +105,48 @@ public class Cookie implements Comparable<Cookie>, Serializable {
     public static final long ARP_POST_INGRESS_ONE_SWITCH_COOKIE = ServiceCookieSchema.INSTANCE.make(
             ServiceCookieTag.ARP_POST_INGRESS_ONE_SWITCH_COOKIE).getValue();
 
-    private long value;
+    // update ALL_FIELDS if modify fields list
+    static final BitField TYPE_FIELD = new BitField(0x1FF0_0000_0000_0000L);
+    static final BitField SERVICE_FLAG = new BitField(0x8000_0000_0000_0000L);
+
+    // used by unit tests to check fields intersections
+    static final BitField[] ALL_FIELDS = new BitField[]{SERVICE_FLAG, TYPE_FIELD};
+
+    private final long value;
 
     @JsonCreator
     public Cookie(long value) {
         this.value = value;
+    }
+
+    @Builder
+    public Cookie(CookieType type) {
+        this(0, type);
+    }
+
+    protected Cookie(long blank, CookieType type) {
+        value = setField(blank, TYPE_FIELD, type.getValue());
+    }
+
+    public boolean safeValidate() {
+        try {
+            validate();
+            return true;
+        } catch (InvalidCookieException e) {
+            return false;
+        }
+    }
+
+    public void validate() throws InvalidCookieException {
+        // inheritors can implement validate logic
+    }
+
+    /**
+     * Extract and return "type" field.
+     */
+    public CookieType getType() {
+        int numericType = (int) getField(TYPE_FIELD);
+        return resolveEnum(CookieType.values(), numericType, CookieType.class);
     }
 
     /**
@@ -175,8 +216,8 @@ public class Cookie implements Comparable<Cookie>, Serializable {
 
     @Deprecated
     public static boolean isDefaultRule(long cookie) {
-        // FIXME(surabujin): replace with direct schema call
-        return ServiceCookieSchema.INSTANCE.isServiceCookie(new Cookie(cookie));
+        // FIXME(surabujin): replace with direct cookie call
+        return new ServiceCookie(cookie).safeValidate();
     }
 
     /**
@@ -185,10 +226,17 @@ public class Cookie implements Comparable<Cookie>, Serializable {
      * <p>Deprecated {@code ServiceCookieSchema.getType()} must be used instead of this method.
      */
     @Deprecated
-    public static boolean isIngressRulePassThrough(long value) {
-        // FIXME(surabujin): replace with direct schema call
-        Cookie cookie = new Cookie(value);
-        return CookieType.MULTI_TABLE_INGRESS_RULES == ServiceCookieSchema.INSTANCE.getType(cookie);
+    public static boolean isIngressRulePassThrough(long raw) {
+        // FIXME(surabujin): replace with direct cookie call
+        return new Cookie(raw).getType() == CookieType.MULTI_TABLE_INGRESS_RULES;
+    }
+
+    protected void validateServiceFlag(boolean expectedValue) throws InvalidCookieException {
+        boolean actual = getField(SERVICE_FLAG) != 0;
+        if (expectedValue != actual) {
+            throw new InvalidCookieException(
+                    String.format("Service flag is expected to be %s", expectedValue ? "set" : "unset"), this);
+        }
     }
 
     @JsonValue
@@ -196,9 +244,43 @@ public class Cookie implements Comparable<Cookie>, Serializable {
         return value;
     }
 
+    /**
+     * Convert existing object into builder.
+     *
+     * <p>Can't delegate production of this method to lombok, because it can't read "virtual" fields i.e. fields not
+     * declared into class but accessible via getters.
+     */
+    public CookieBuilder toBuilder() {
+        return new CookieBuilder()
+                .type(getType());
+    }
+
     @Override
     public String toString() {
         return toString(value);
+    }
+
+    protected long getField(BitField field) {
+        long payload = value & field.getMask();
+        return payload >>> field.getOffset();
+    }
+
+    protected static <T extends NumericEnumField> T resolveEnum(T[] valuesSpace, long needle, Class<T> typeRef) {
+        for (T entry : valuesSpace) {
+            if (entry.getValue() == needle) {
+                return entry;
+            }
+        }
+
+        throw new IllegalArgumentException(String.format(
+                "Unable to map value %x value into %s value", needle, typeRef.getSimpleName()));
+    }
+
+    protected static long setField(long value, BitField field, long payload) {
+        long mask = field.getMask();
+        payload <<= field.getOffset();
+        payload &= mask;
+        return (value & ~mask) | payload;
     }
 
     public static String toString(long cookie) {
@@ -208,5 +290,28 @@ public class Cookie implements Comparable<Cookie>, Serializable {
     @Override
     public int compareTo(Cookie compareWith) {
         return Long.compare(value, compareWith.value);
+    }
+
+    // 9 bit long type field
+    public enum CookieType implements NumericEnumField {
+        SERVICE_OR_FLOW_SEGMENT(0x000),
+        LLDP_INPUT_CUSTOMER_TYPE(0x001),
+        MULTI_TABLE_ISL_VLAN_EGRESS_RULES(0x002),
+        MULTI_TABLE_ISL_VXLAN_EGRESS_RULES(0x003),
+        MULTI_TABLE_ISL_VXLAN_TRANSIT_RULES(0x004),
+        MULTI_TABLE_INGRESS_RULES(0x005),
+        ARP_INPUT_CUSTOMER_TYPE(0x006),
+        INGRESS_SEGMENT(0x007),   // used for ingress flow segment and for one switch flow segments
+        SHARED_OF_FLOW(0x008);
+
+        private int value;
+
+        CookieType(int value) {
+            this.value = value;
+        }
+
+        public int getValue() {
+            return value;
+        }
     }
 }
