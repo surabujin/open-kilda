@@ -1,4 +1,4 @@
-/* Copyright 2019 Telstra Open Source
+/* Copyright 2020 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -13,16 +13,7 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.network.model;
+package org.openkilda.wfm.topology.network.controller.isl;
 
-import lombok.Getter;
-
-// TODO - del
-public class TickClock {
-    @Getter
-    private long currentTimeMs = 0;
-
-    public void tick(long timeMs) {
-        currentTimeMs = timeMs;
-    }
+public class DiscoveryBfdMonitor extends DiscoveryMonitor {
 }

@@ -1,4 +1,11 @@
 Internal data:
+* reference
+* effective-status
+* port-state-monitor
+* poll-monitor
+* bfd-monitor
+* round-trip-monitor
+
 * endpoint-A
 * endpoint-B
 * endpoint-A-up
@@ -9,6 +16,8 @@ Input signals:
 * isl-up
 * isl-down
 * isl-move
+* BFD-up
+* BFD-down
 * round-trip-status
 
 Internal(self-injected) signals
@@ -20,6 +29,47 @@ Output signals:
 * bisl-bfd-enable
 * bisl-bfd-disable
 * isl-move
+
+@startuml
+title ISL FSM
+
+[*] --> INIT
+
+INIT --> OPERATIONAL : next / load persisted state
+
+state OPERATIONAL {
+    [*] -r-> PENDING
+
+    PENDING -r-> SET_UP_RESOURCES : _become_up
+    PENDING --> INACTIVE : _become_down
+    PENDING --> MOVED : _become_moved
+    PENDING : _sync / persist discovery data
+
+    SET_UP_RESOURCES --> ACTIVE : _setup_done
+    SET_UP_RESOURCES --> INACTIVE : _become_down
+    SET_UP_RESOURCES : enter / init attempts count from config
+    SET_UP_RESOURCES : enter / send install isl rules for A-end
+    SET_UP_RESOURCES : enter / send install isl rules for Z-end
+    SET_UP_RESOURCES : isl-rule-installed [both sides are valid] / emit _setup_done
+    SET_UP_RESOURCES : isl-rule-timeout [has attempts] / emit install isl rules for timeout endpoint
+    SET_UP_RESOURCES : isl-rule-timeout [!has attempts] / emit _setup_done
+    SET_UP_RESOURCES : _sync / persist discovery data
+
+    ACTIVE --> INACTIVE : _become_down
+    ACTIVE --> MOVED : _become_moved
+    ACTIVE : enter / persist state
+    ACTIVE : _sync / persist discovery data
+
+    INACTIVE --> SET_UP_RESOURCES : _become_up
+    INACTIVE -d-> MOVED : _become_moved
+    INACTIVE : enter / persist state
+    INACTIVE : _sync / persist discovery data
+
+    MOVED --> SET_UP_RESOURCES : _become_up
+    MOVED : enter / persist state
+    MOVED : _sync / persist discovery data
+}
+@enduml
 
 @startuml
 title ISL FSM

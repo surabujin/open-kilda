@@ -1,4 +1,4 @@
-/* Copyright 2019 Telstra Open Source
+/* Copyright 2020 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -15,14 +15,17 @@
 
 package org.openkilda.wfm.topology.network.model;
 
-import lombok.Getter;
+import org.openkilda.model.IslStatus;
 
-// TODO - del
-public class TickClock {
-    @Getter
-    private long currentTimeMs = 0;
+import lombok.Value;
 
-    public void tick(long timeMs) {
-        currentTimeMs = timeMs;
+@Value
+public class IslPollStatus {
+    IslDataHolder islData;
+
+    IslStatus status;
+
+    public IslPollStatus(IslStatus status) {
+        this(null, status);
     }
 }

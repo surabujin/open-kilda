@@ -19,6 +19,7 @@ import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.model.BiIslDataHolder;
 import org.openkilda.wfm.topology.network.model.IslDataHolder;
 
+// TODO - replace with monitor
 public class DiscoveryFacts extends BiIslDataHolder<IslDataHolder> {
     public DiscoveryFacts(IslReference reference) {
         super(reference);
