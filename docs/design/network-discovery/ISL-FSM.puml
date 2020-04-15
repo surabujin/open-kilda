@@ -33,9 +33,7 @@ Output signals:
 @startuml
 title ISL FSM
 
-[*] --> INIT
-
-INIT --> OPERATIONAL : next / load persisted state
+[*] --> OPERATIONAL
 
 state OPERATIONAL {
     [*] --> PENDING
@@ -59,6 +57,7 @@ state OPERATIONAL {
     ACTIVE --> MOVED : _become_moved
     ACTIVE : enter / persist state
     ACTIVE : enter [enable_bfd in DB is set] / emit bisl-bfd-enable
+    ACTIVE : exit / emit bisl-down
     ACTIVE : _sync / persist discovery data
 
     INACTIVE --> SET_UP_RESOURCES : _become_up
@@ -70,9 +69,12 @@ state OPERATIONAL {
 
     MOVED --> SET_UP_RESOURCES : _become_up
     MOVED : enter / persist state
+    MOVED : enter / emit isl-move
+    MOVED : enter / emit bisl-bfd-disable
     MOVED : _sync / persist discovery data
 }
 OPERATIONAL --> CLEAN_UP_RESOURCES : isl-remove [effective_status == INACTIVE]
+OPERATIONAL : enter / load persisted state
 OPERATIONAL : isl-(up|down|move) / evaluate-state (can emit sync and|or _become_(up|down|moved))
 OPERATIONAL : bfd-(up|down) / evaluate-state (can emit sync and|or _become_(up|down))
 OPERATIONAL : round-trip-status / evaluate-state (can emit sync and|or _become_(up|down))
@@ -85,80 +87,6 @@ CLEAN_UP_RESOURCES : isl-rule-timeout [has attempts] / emit remove isl rules for
 CLEAN_UP_RESOURCES : isl-rule-timeout [!has attempts] / emit isl-remove-finished
 CLEAN_UP_RESOURCES : isl-rule-failed [has attempts] / resend remove commands
 CLEAN_UP_RESOURCES --> DELETED : isl-remove-finished
-
-DELETED -> [*]
-@enduml
-
-@startuml
-title ISL FSM
-
-[*] --> INIT
-
-INIT --> DOWN : isl-up / set endpoint-(A||B)-status = UP\nisl-down / set endpoint-(A||B)-status = DOWN
-INIT --> DOWN : history [history-down]
-
-INIT --> SET_UP_RESOURCES : history [history-up]\n/ apply-history\n/ emit bisl-bfd-enable
-INIT --> MOVED : history [history-moved]\nisl-move / set endpoint-(A||B)-status = MOVED
-
-state upAttempt <<choice>>
-state deleteAttempt <<choice>>
-deleteAttempt --> CLEAN_UP_RESOURCES : [endpoint-(A&B)-status == DOWN]
-
-DOWN --> upAttempt : isl-up / set endpoint-(A||B)-status = DOWN && discovery-data
-DOWN --> MOVED : isl-move
-DOWN : enter / persist DB state
-DOWN : isl-down / set endpoint-(A||B)-status = DOWN
-DOWN : isl-down / persist DB state
-DOWN -> deleteAttempt : isl-remove
-
-upAttempt --> SET_UP_RESOURCES : [endpoint-(A&&B)-status == UP]
-upAttempt --> DOWN : [else]
-
-SET_UP_RESOURCES : enter / init attempts count from config
-SET_UP_RESOURCES : enter / send install isl rules for source endpoint
-SET_UP_RESOURCES : enter / send install isl rules for destination endpoint
-SET_UP_RESOURCES : isl-rule-installed [both sides are valid] / emit isl-up
-SET_UP_RESOURCES : isl-rule-installed [!both sides are valid] / wait for both endpoint responses
-SET_UP_RESOURCES : isl-rule-timeout [has attempts] / emit install isl rules for timeout endpoint
-SET_UP_RESOURCES : isl-rule-timeout [!has attempts] / emit isl-up
-SET_UP_RESOURCES --> DOWN : isl-down
-SET_UP_RESOURCES --> MOVED : isl-move
-SET_UP_RESOURCES --> UP : isl-up
-
-UP --> DOWN : _become_down\nisl-down [physical-down] / raise ISL(uni) cost
-UP --> MOVED : isl-move / set endpoint-(A|B)-status = MOVED
-UP : enter [enable_bfd in DB is set] / emit bisl-bfd-enable
-UP : enter / persist DB state
-UP : isl-up / set endpoint-(A||B)-status = UP
-UP : isl-up / evaluate-state (can emit _become_down)
-UP : isl-up / persist DB state
-UP : isl-down / set endpoint-(A||B)-status = DOWN
-UP : isl-down / evaluate-state (can emit _become_down)
-UP : isl-down / persist DB state
-UP : round-trip-status / set round-trip-expire-at
-UP : round-trip-status / evaluate-state (can emit _become_down)
-UP : exit / persist DB state
-UP : exit / emit bisl-down
-UP : exit / clean round-trip-expire-at
-
-CLEAN_UP_RESOURCES : enter / init attempts count from config
-CLEAN_UP_RESOURCES : enter / send remove isl rules for source endpoint
-CLEAN_UP_RESOURCES : enter / send remove isl rules for destination endpoint
-CLEAN_UP_RESOURCES : isl-rule-removed [!both endpoints are valid] / wait for both endpoint responses
-CLEAN_UP_RESOURCES : isl-rule-removed [both endpoints are valid] / emit isl-remove-finished
-CLEAN_UP_RESOURCES : isl-rule-timeout [has attempts] / emit remove isl rules for timeout endpoint
-CLEAN_UP_RESOURCES : isl-rule-timeout [!has attempts] / emit isl-remove-finished
-CLEAN_UP_RESOURCES : isl-rule-failed [has attempts] / resend remove commands
-CLEAN_UP_RESOURCES --> DELETED : isl-remove-finished
-
-MOVED --> upAttempt : isl-up / set endpoint-(A|B)-status = UP
-MOVED --> deleteAttempt : isl-remove
-MOVED : enter / persist DB state
-MOVED : enter / emit isl-move
-MOVED : enter / set endpoint-(A|B)-status = MOVED
-MOVED : enter / emit bisl-bfd-disable
-MOVED : isl-down / set endpoint-(A|B)-status = DOWN
-MOVED : isl-down / persist DB state
 
 DELETED -> [*]
 @enduml

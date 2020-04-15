@@ -35,6 +35,10 @@ abstract class DiscoveryMonitor<T> {
         discoveryData = new BiIslDataHolder<>(reference);
     }
 
+    public void load(Endpoint endpoint, Isl persistentView) {
+        // successors can sync their state to persistent state
+    }
+
     public boolean update(Endpoint endpoint, IslFsmEvent event, IslFsmContext context) {
         actualUpdate(endpoint, event, context);
         return isSyncRequired();

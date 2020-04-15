@@ -57,6 +57,7 @@ import org.openkilda.wfm.topology.network.model.facts.DiscoveryFacts;
 import org.openkilda.wfm.topology.network.service.IIslCarrier;
 import org.openkilda.wfm.topology.network.storm.bolt.isl.BfdManager;
 
+import com.google.common.collect.ImmutableList;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -66,15 +67,21 @@ import org.squirrelframework.foundation.fsm.StateMachineBuilder;
 import org.squirrelframework.foundation.fsm.StateMachineBuilderFactory;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEvent, IslFsmContext> {
+    private final IslReference reference;
+    private IslStatus effectiveStatus;
+
+    private final List<DiscoveryMonitor> monitorsByPriority;
+
+    // FIXME - start
     private final Clock clock;
 
     private final IslReportFsm reportFsm;
@@ -90,17 +97,14 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     private final RetryPolicy transactionRetryPolicy;
 
-    private final Duration roundTripExpirationTime;
-
-    private final IslReference reference;
-
     private final BiIslDataHolder<IslEndpointStatus> endpointStatus;
     private final BiIslDataHolder<IslEndpointRoundTripStatus> endpointRoundTripStatus;
 
     private final DiscoveryFacts discoveryFacts;
-    private boolean ignoreRerouteOnUp = false;
+    private boolean ignoreRerouteOnUp = false;  // TODO: ??? do not work now
     private final NetworkOptions options;
     private long islRulesAttempts;
+    // FIXME - end
 
     public static IslFsmFactory factory(Clock clock, PersistenceManager persistenceManager,
                                         NetworkTopologyDashboardLogger.Builder dashboardLoggerBuilder) {
@@ -109,6 +113,15 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     public IslFsm(Clock clock, PersistenceManager persistenceManager, IslReportFsm reportFsm, BfdManager bfdManager,
                   NetworkOptions options, IslReference reference) {
+        this.reference = reference;
+
+        monitorsByPriority = ImmutableList.of(
+                new DiscoveryPortStatusMonitor(reference),
+                new DiscoveryBfdMonitor(reference),
+                new DiscoveryRoundTripMonitor(reference, clock, options),
+                new DiscoveryPollMonitor(reference));
+
+        // FIXME - start
         this.clock = clock;
 
         this.reportFsm = reportFsm;
@@ -126,10 +139,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         featureTogglesRepository = repositoryFactory.createFeatureTogglesRepository();
         switchPropertiesRepository = repositoryFactory.createSwitchPropertiesRepository();
 
-        roundTripExpirationTime = Duration.ofNanos(options.getDiscoveryTimeout());
-
-        this.reference = reference;
-
         endpointStatus = new BiIslDataHolder<>(reference);
         endpointStatus.putBoth(new IslEndpointStatus(IslEndpointStatus.Status.DOWN));
 
@@ -139,34 +148,22 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
         discoveryFacts = new DiscoveryFacts(reference);
         this.options = options;
+        // FIXME - start
     }
 
     // -- FSM actions --
 
-    public void handleHistory(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        applyHistory(context.getHistory());
+    public void loadPersistedState(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        transactionManager.doInTransaction(() -> {
+            loadPersistentData(reference.getSource(), reference.getDest());
+            loadPersistentData(reference.getDest(), reference.getSource());
+        });
 
-        IslFsmEvent route;
-        IslEndpointStatus.Status status = getAggregatedStatus();
-        switch (status) {
-            case UP:
-                route = IslFsmEvent._HISTORY_UP;
-                ignoreRerouteOnUp = true;
-                break;
-            case DOWN:
-                route = IslFsmEvent._HISTORY_DOWN;
-                break;
-            case MOVED:
-                route = IslFsmEvent._HISTORY_MOVED;
-                break;
-            default:
-                throw new IllegalArgumentException(makeInvalidMappingMessage(
-                        status.getClass(), IslFsmEvent.class, status));
-        }
-
-        fire(route, context);
+        effectiveStatus = evaluateStatus();
+        emitBecomeStateEvent(context);
     }
 
+    // FIXME - {{{
     public void historyRestoreUp(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         sendBfdEnable(context.getOutput());
     }
@@ -198,7 +195,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         updateLinkData(context.getEndpoint(), context.getIslData());
 
         IslFsmEvent route;
-        if (getAggregatedStatus() == IslEndpointStatus.Status.UP) {
+        if (evaluateStatus() == IslEndpointStatus.Status.UP) {
             route = IslFsmEvent._UP_ATTEMPT_SUCCESS;
         } else {
             route = IslFsmEvent._UP_ATTEMPT_FAIL;
@@ -263,7 +260,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         updateEndpointStatusByEvent(event, context);
         saveStatusTransaction();
 
-        if (getAggregatedStatus() != IslEndpointStatus.Status.UP) {
+        if (evaluateStatus() != IslEndpointStatus.Status.UP) {
             fire(IslFsmEvent._BECOME_DOWN, context);
         }
     }
@@ -278,7 +275,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
             saveStatusTransaction();
         }
 
-        if (getAggregatedStatus() != IslEndpointStatus.Status.UP) {
+        if (evaluateStatus() != IslEndpointStatus.Status.UP) {
             fire(IslFsmEvent._BECOME_DOWN, context);
         }
     }
@@ -333,8 +330,8 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     public void removeAttempt(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         // FIXME(surabujin): this check is always true, because it is called from DOWN or MOVED state
-        if (getAggregatedStatus() != IslEndpointStatus.Status.UP) {
-            fire(IslFsmEvent._ISL_REMOVE_SUCESS, context);
+        if (evaluateStatus() != IslEndpointStatus.Status.UP) {
+            fire(IslFsmEvent._ISL_REMOVE_SUCCESS, context);
         }
     }
 
@@ -422,15 +419,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         discoveryFacts.put(bind, data);
     }
 
-    private void applyHistory(Isl history) {
-        Endpoint source = Endpoint.of(history.getSrcSwitch().getSwitchId(), history.getSrcPort());
-        Endpoint dest = Endpoint.of(history.getDestSwitch().getSwitchId(), history.getDestPort());
-        transactionManager.doInTransaction(() -> {
-            loadPersistentData(source, dest);
-            loadPersistentData(dest, source);
-        });
-    }
-
     private void updateEndpointStatusByEvent(IslFsmEvent event, IslFsmContext context) {
         IslEndpointStatus status = null;
         switch (event) {
@@ -459,11 +447,10 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                 end.getDatapath(), end.getPortNumber());
         if (potentialIsl.isPresent()) {
             Isl isl = potentialIsl.get();
-            Endpoint endpoint = Endpoint.of(isl.getDestSwitch().getSwitchId(), isl.getDestPort());
 
-            IslEndpointStatus status = new IslEndpointStatus(mapStatus(isl.getStatus()), isl.getDownReason());
-            endpointStatus.put(endpoint, status);
-            discoveryFacts.put(endpoint, new IslDataHolder(isl));
+            for (DiscoveryMonitor<?> entry : monitorsByPriority) {
+                entry.load(start, isl);
+            }
         } else {
             log.error("There is no persistent ISL data {} ==> {} (possible race condition during topology "
                               + "initialisation)", start, end);
@@ -638,7 +625,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
         IslStatus pollStatus = mapStatus(pollData.getStatus());
         IslStatus roundTripStatus = evaluateRoundTripStatus(endpoint, timeNow);
-        IslStatus aggStatus = mapStatus(getAggregatedStatus(timeNow));
+        IslStatus aggStatus = mapStatus(evaluateStatus(timeNow));
         if (link.getActualStatus() != pollStatus
                 || link.getStatus() != aggStatus
                 || link.getRoundTripStatus() != roundTripStatus) {
@@ -708,30 +695,33 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         return result;
     }
 
-    private IslEndpointStatus.Status getAggregatedStatus() {
-        return getAggregatedStatus(clock.instant());
+    private IslStatus evaluateStatus() {
+        for (DiscoveryMonitor<?> entry : monitorsByPriority) {
+            Optional<IslStatus> status = entry.evaluateStatus();
+            if (status.isPresent()) {
+                return status.get();
+            }
+        }
+        return IslStatus.INACTIVE;
     }
 
-    private IslEndpointStatus.Status getAggregatedStatus(Instant now) {
-        IslEndpointStatus.Status forward = endpointStatus.getForward().getStatus();
-        IslEndpointStatus.Status reverse = endpointStatus.getReverse().getStatus();
-
-        if (forward == IslEndpointStatus.Status.MOVED || reverse == IslEndpointStatus.Status.MOVED) {
-            return IslEndpointStatus.Status.MOVED;
+    private void emitBecomeStateEvent(IslFsmContext context) {
+        IslFsmEvent route;
+        switch (effectiveStatus) {
+            case ACTIVE:
+                route = IslFsmEvent._BECOME_UP;
+                break;
+            case INACTIVE:
+                route = IslFsmEvent._BECOME_DOWN;
+                break;
+            case MOVED:
+                route = IslFsmEvent._BECOME_MOVED;
+                break;
+            default:
+                throw new IllegalArgumentException(makeInvalidMappingMessage(
+                        effectiveStatus.getClass(), IslFsmEvent.class, effectiveStatus));
         }
-
-        boolean isRoundTripActive = endpointRoundTripStatus.stream()
-                .map(entry -> evaluateRoundTripStatus(entry, now))
-                .anyMatch(entry -> IslStatus.ACTIVE == entry);
-        if (isRoundTripActive) {
-            return IslEndpointStatus.Status.UP;
-        }
-
-        if (forward == reverse) {
-            return forward;
-        }
-
-        return IslEndpointStatus.Status.DOWN;
+        fire(route, context);
     }
 
     private boolean shouldSetupBfd() {
@@ -757,7 +747,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     }
 
     private String makeRerouteReason(Endpoint endpoint, IslDownReason reason) {
-        IslStatus status = mapStatus(getAggregatedStatus());
+        IslStatus status = mapStatus(evaluateStatus());
         IslReference reference = discoveryFacts.getReference();
         if (reason == null) {
             return String.format("ISL %s status become %s", reference, status);
@@ -784,33 +774,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         }
 
         return humanReason;
-    }
-
-    private Instant evaluateRoundTripExpireAtTime(RoundTripStatus status) {
-        Duration foreignObsolescence = Duration.between(status.getLastSeen(), status.getNow());
-        Duration timeLeft = roundTripExpirationTime.minus(foreignObsolescence);
-        if (timeLeft.isNegative()) {
-            return null;
-        }
-
-        return clock.instant().plus(timeLeft);
-    }
-
-    private IslStatus evaluateRoundTripStatus(Endpoint endpoint, Instant now) {
-        return evaluateRoundTripStatus(endpointRoundTripStatus.get(endpoint), now);
-    }
-
-    private IslStatus evaluateRoundTripStatus(IslEndpointRoundTripStatus roundTripData, Instant now) {
-        Instant expireAt = roundTripData.getExpireAt();
-        if (expireAt == null) {
-            return null;
-        }
-
-        if (now.isBefore(expireAt)) {
-            return IslStatus.ACTIVE;
-        } else {
-            return IslStatus.INACTIVE;
-        }
     }
 
     private static IslStatus mapStatus(IslEndpointStatus.Status status) {
@@ -858,6 +821,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         Anchor dest;
     }
 
+    // FIXME - }}}
     public static class IslFsmFactory {
         private final Clock clock;
 
@@ -879,6 +843,11 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     Clock.class, PersistenceManager.class, IslReportFsm.class, BfdManager.class, NetworkOptions.class,
                     IslReference.class);
 
+            // OPERATIONAL
+            builder.onEntry(IslFsmState.OPERATIONAL)
+                    .callMethod("loadPersistedState");
+
+            // FIXME - {{{
             String updateEndpointStatusMethod = "updateEndpointStatus";
             String updateAndPersistEndpointStatusMethod = "updateAndPersistEndpointStatus";
 
@@ -917,7 +886,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     .within(IslFsmState.DOWN).on(IslFsmEvent.ISL_REMOVE)
                     .callMethod("removeAttempt");
             builder.transition()
-                    .from(IslFsmState.DOWN).to(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent._ISL_REMOVE_SUCESS);
+                    .from(IslFsmState.DOWN).to(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent._ISL_REMOVE_SUCCESS);
             builder.onEntry(IslFsmState.DOWN)
                     .callMethod("downEnter");
 
@@ -993,7 +962,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     .within(IslFsmState.MOVED).on(IslFsmEvent.ISL_REMOVE)
                     .callMethod("removeAttempt");
             builder.transition()
-                    .from(IslFsmState.MOVED).to(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent._ISL_REMOVE_SUCESS);
+                    .from(IslFsmState.MOVED).to(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent._ISL_REMOVE_SUCCESS);
             builder.onEntry(IslFsmState.MOVED)
                     .callMethod("movedEnter");
 
@@ -1007,6 +976,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
             builder.internalTransition()
                     .within(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent.ISL_RULE_TIMEOUT)
                     .callMethod("cleanUpResourcesTimeout");
+            // FIXME - }}}
 
             // DELETED
             builder.defineFinalState(IslFsmState.DELETED);
@@ -1031,6 +1001,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     @Value
     @Builder
     public static class IslFsmContext {
+        // FIXME - {{{
         private final IIslCarrier output;
         private final Endpoint endpoint;
 
@@ -1043,6 +1014,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         private Boolean bfdEnable;
 
         private RoundTripStatus roundTripStatus;
+        // FIXME - }}}
 
         /**
          * .
@@ -1056,23 +1028,26 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     public enum IslFsmEvent {
         NEXT,
+        _BECOME_UP, _BECOME_DOWN, _BECOME_MOVED,
 
+        // FIXME - {{{
         HISTORY, _HISTORY_DOWN, _HISTORY_UP, _HISTORY_MOVED,
         ISL_UP, ISL_DOWN, ISL_MOVE, ROUND_TRIP_STATUS,
-        _BECOME_DOWN,
-        _UP_ATTEMPT_SUCCESS, ISL_REMOVE, ISL_REMOVE_FINISHED, _ISL_REMOVE_SUCESS, _UP_ATTEMPT_FAIL,
+
+        _UP_ATTEMPT_SUCCESS, ISL_REMOVE, ISL_REMOVE_FINISHED, _ISL_REMOVE_SUCCESS, _UP_ATTEMPT_FAIL,
         ISL_RULE_INSTALLED, ISL_RULE_INSTALL_FAILED,
         ISL_RULE_REMOVED, ISL_RULE_REMOVE_FAILED,
         ISL_RULE_TIMEOUT,
         ISL_MULTI_TABLE_MODE_UPDATED,
+        // FIXME - }}}
     }
 
     public enum IslFsmState {
-        INIT,
-        SET_UP_RESOURCES,
-        UP, DOWN,
-        MOVED,
-
-        CLEAN_UP_RESOURCES, DELETED, UP_ATTEMPT
+        OPERATIONAL,
+        SET_UP_RESOURCES, CLEAN_UP_RESOURCES,
+        DELETED,
+        // FIXME - {{{
+        UP, DOWN, MOVED,
+        // FIXME - }}}
     }
 }

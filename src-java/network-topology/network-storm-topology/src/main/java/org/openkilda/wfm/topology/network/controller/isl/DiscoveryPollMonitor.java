@@ -21,6 +21,7 @@ import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmContext;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmEvent;
+import org.openkilda.wfm.topology.network.model.IslDataHolder;
 import org.openkilda.wfm.topology.network.model.IslPollStatus;
 
 import java.util.Optional;
@@ -29,6 +30,17 @@ public class DiscoveryPollMonitor extends DiscoveryMonitor<IslPollStatus> {
     public DiscoveryPollMonitor(IslReference reference) {
         super(reference);
         IslPollStatus dummy = new IslPollStatus(IslStatus.INACTIVE);
+    }
+
+    @Override
+    public void load(Endpoint endpoint, Isl persistentView) {
+        super.load(endpoint, persistentView);
+
+        IslDataHolder islData = new IslDataHolder(persistentView);
+        IslPollStatus status = new IslPollStatus(islData, persistentView.getStatus());
+
+        discoveryData.put(endpoint, status);
+        cache.put(endpoint, status);
     }
 
     @Override

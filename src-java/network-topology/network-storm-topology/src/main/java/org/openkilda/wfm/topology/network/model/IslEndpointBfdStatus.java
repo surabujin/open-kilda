@@ -1,4 +1,5 @@
-/* Copyright 2020 Telstra Open Source
+/*
+ * Copyright 2020 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -17,14 +18,15 @@ package org.openkilda.wfm.topology.network.model;
 
 import org.openkilda.model.IslStatus;
 
-import lombok.Data;
+import lombok.Value;
 
-import java.time.Instant;
+@Value
+public class IslEndpointBfdStatus {
+    boolean enabled;
 
-// FIXME - 2del?
-@Data
-public class IslEndpointRoundTripStatus {
-    private Instant expireAt;
+    IslStatus status;
 
-    private IslStatus storedStatus;
+    public IslEndpointBfdStatus() {
+        this(false, null);
+    }
 }
