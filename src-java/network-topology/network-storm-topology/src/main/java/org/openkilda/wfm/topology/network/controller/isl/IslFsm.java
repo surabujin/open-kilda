@@ -168,8 +168,11 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         for (DiscoveryMonitor<?> entry : monitorsByPriority) {
             isSyncRequired |= entry.update(event, context);
         }
-        if (isSyncRequired) {
-            // TODO -> become_*
+
+        IslStatus statusBecome = evaluateStatus();
+        if (effectiveStatus != statusBecome) {
+            emitBecomeStateEvent(context);
+        } else if (isSyncRequired) {
             fire(IslFsmEvent._SYNC);
         }
     }
