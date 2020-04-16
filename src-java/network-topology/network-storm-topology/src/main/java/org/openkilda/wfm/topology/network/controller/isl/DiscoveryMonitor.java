@@ -39,12 +39,12 @@ abstract class DiscoveryMonitor<T> {
         // successors can sync their state to persistent state
     }
 
-    public boolean update(Endpoint endpoint, IslFsmEvent event, IslFsmContext context) {
-        actualUpdate(endpoint, event, context);
+    public boolean update(IslFsmEvent event, IslFsmContext context) {
+        actualUpdate(event, context);
         return isSyncRequired();
     }
 
-    public abstract void actualUpdate(Endpoint endpoint, IslFsmEvent event, IslFsmContext context);
+    public abstract void actualUpdate(IslFsmEvent event, IslFsmContext context);
 
     public abstract Optional<IslStatus> evaluateStatus();
 
@@ -52,13 +52,12 @@ abstract class DiscoveryMonitor<T> {
 
     protected boolean isSyncRequired() {
         IslReference reference = discoveryData.getReference();
-        return ! compareEffectiveWithPersistent(reference.getSource())
-                || !compareEffectiveWithPersistent(reference.getDest());
+        return !isDataMatchCache(reference.getSource()) || !isDataMatchCache(reference.getDest());
     }
 
-    private boolean compareEffectiveWithPersistent(Endpoint endpoint) {
+    private boolean isDataMatchCache(Endpoint endpoint) {
         T effective = discoveryData.get(endpoint);
-        T persisted = cache.get(endpoint);
-        return Objects.equals(effective, persisted);
+        T cached = cache.get(endpoint);
+        return Objects.equals(effective, cached);
     }
 }

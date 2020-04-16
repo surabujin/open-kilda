@@ -163,6 +163,17 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         emitBecomeStateEvent(context);
     }
 
+    public void updateMonitors(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        boolean isSyncRequired = false;
+        for (DiscoveryMonitor<?> entry : monitorsByPriority) {
+            isSyncRequired |= entry.update(event, context);
+        }
+        if (isSyncRequired) {
+            // TODO -> become_*
+            fire(IslFsmEvent._SYNC);
+        }
+    }
+
     // FIXME - {{{
     public void historyRestoreUp(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         sendBfdEnable(context.getOutput());
@@ -843,9 +854,16 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     Clock.class, PersistenceManager.class, IslReportFsm.class, BfdManager.class, NetworkOptions.class,
                     IslReference.class);
 
+            final String updateMonitorsMethod = "updateMonitors";
+
             // OPERATIONAL
             builder.onEntry(IslFsmState.OPERATIONAL)
                     .callMethod("loadPersistedState");
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ISL_UP)
+                    .callMethod(updateMonitorsMethod);
+            builder.defineSequentialStatesOn(
+                    IslFsmState.OPERATIONAL,
+                    IslFsmState.PENDING, IslFsmState.ACTIVE, IslFsmState.INACTIVE, IslFsmState.MOVED);
 
             // FIXME - {{{
             String updateEndpointStatusMethod = "updateEndpointStatus";
@@ -1028,6 +1046,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     public enum IslFsmEvent {
         NEXT,
+        _SYNC,
         _BECOME_UP, _BECOME_DOWN, _BECOME_MOVED,
 
         // FIXME - {{{
@@ -1044,10 +1063,8 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     public enum IslFsmState {
         OPERATIONAL,
+        PENDING, ACTIVE, INACTIVE, MOVED,
         SET_UP_RESOURCES, CLEAN_UP_RESOURCES,
         DELETED,
-        // FIXME - {{{
-        UP, DOWN, MOVED,
-        // FIXME - }}}
     }
 }

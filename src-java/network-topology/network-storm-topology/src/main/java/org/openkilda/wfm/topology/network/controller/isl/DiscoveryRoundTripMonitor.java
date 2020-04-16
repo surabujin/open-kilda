@@ -41,17 +41,12 @@ public class DiscoveryRoundTripMonitor extends DiscoveryMonitor<Instant> {
     }
 
     @Override
-    public void actualUpdate(Endpoint endpoint, IslFsmEvent event, IslFsmContext context) {
-        Instant update = discoveryData.get(endpoint);
-        switch (event) {
-            case ROUND_TRIP_STATUS:
-                update = evaluateExpireAtTime(context.getRoundTripStatus());
-                break;
-
-            default:
-                // nothing to do here
+    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
+        Endpoint endpoint = context.getEndpoint();
+        if (event == IslFsmEvent.ROUND_TRIP_STATUS) {
+            Instant update = evaluateExpireAtTime(context.getRoundTripStatus());
+            discoveryData.put(endpoint, update);
         }
-        discoveryData.put(endpoint, update);
     }
 
     @Override

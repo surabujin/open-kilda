@@ -34,7 +34,7 @@ public class DiscoveryPortStatusMonitor extends DiscoveryMonitor<LinkStatus> {
     }
 
     @Override
-    public void actualUpdate(Endpoint endpoint, IslFsmEvent event, IslFsmContext context) {
+    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
         LinkStatus update = null;
         switch (event) {
             case ISL_DOWN:
@@ -51,7 +51,7 @@ public class DiscoveryPortStatusMonitor extends DiscoveryMonitor<LinkStatus> {
         }
 
         if (update != null) {
-            discoveryData.put(endpoint, update);
+            discoveryData.put(context.getEndpoint(), update);
         }
     }
 

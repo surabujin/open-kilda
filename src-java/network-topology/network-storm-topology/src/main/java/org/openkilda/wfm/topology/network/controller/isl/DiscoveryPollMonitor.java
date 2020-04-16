@@ -44,7 +44,8 @@ public class DiscoveryPollMonitor extends DiscoveryMonitor<IslPollStatus> {
     }
 
     @Override
-    public void actualUpdate(Endpoint endpoint, IslFsmEvent event, IslFsmContext context) {
+    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
+        Endpoint endpoint = context.getEndpoint();
         IslPollStatus update = discoveryData.get(endpoint);
         switch (event) {
             case ISL_UP:

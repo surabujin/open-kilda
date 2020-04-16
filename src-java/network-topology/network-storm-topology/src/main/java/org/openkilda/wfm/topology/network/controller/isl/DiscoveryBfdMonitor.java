@@ -34,7 +34,7 @@ public class DiscoveryBfdMonitor extends DiscoveryMonitor<IslEndpointBfdStatus> 
     }
 
     @Override
-    public void actualUpdate(Endpoint endpoint, IslFsmEvent event, IslFsmContext context) {
+    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
 
     }
 
