@@ -20,12 +20,12 @@ import org.openkilda.model.IslStatus;
 import lombok.Value;
 
 @Value
-public class IslPollStatus {
+public class IslEndpointPollStatus {
     IslDataHolder islData;
 
     IslStatus status;
 
-    public IslPollStatus(IslStatus status) {
+    public IslEndpointPollStatus(IslStatus status) {
         this(null, status);
     }
 }

@@ -16,6 +16,7 @@
 package org.openkilda.wfm.topology.network.controller.isl;
 
 import org.openkilda.model.Isl;
+import org.openkilda.model.IslDownReason;
 import org.openkilda.model.IslStatus;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
@@ -27,12 +28,14 @@ import java.util.Objects;
 import java.util.Optional;
 
 abstract class DiscoveryMonitor<T> {
+    protected final IslReference reference;
     protected final BiIslDataHolder<T> discoveryData;
     protected final BiIslDataHolder<T> cache;
 
     protected DiscoveryMonitor(IslReference reference) {
-        cache = new BiIslDataHolder<>(reference);
+        this.reference = reference;
         discoveryData = new BiIslDataHolder<>(reference);
+        cache = new BiIslDataHolder<>(reference);
     }
 
     public void load(Endpoint endpoint, Isl persistentView) {
@@ -41,18 +44,31 @@ abstract class DiscoveryMonitor<T> {
 
     public boolean update(IslFsmEvent event, IslFsmContext context) {
         actualUpdate(event, context);
-        return isSyncRequired();
+        return isFlushRequired();
     }
 
-    public abstract void actualUpdate(IslFsmEvent event, IslFsmContext context);
+    public void flush(Endpoint endpoint, Isl persistentView) {
+        if (isEndpointFlushRequired(endpoint)) {
+            return;
+        }
+        actualFlush(endpoint, persistentView);
+        cache.put(endpoint, discoveryData.get(endpoint));
+    }
 
     public abstract Optional<IslStatus> evaluateStatus();
 
-    public abstract void sync(Endpoint endpoint, Isl persistentView);
+    public abstract IslDownReason getDownReason();
 
-    protected boolean isSyncRequired() {
-        IslReference reference = discoveryData.getReference();
+    protected abstract void actualUpdate(IslFsmEvent event, IslFsmContext context);
+
+    protected abstract void actualFlush(Endpoint endpoint, Isl persistentView);
+
+    protected boolean isFlushRequired() {
         return !isDataMatchCache(reference.getSource()) || !isDataMatchCache(reference.getDest());
+    }
+
+    protected boolean isEndpointFlushRequired(Endpoint endpoint) {
+        return !isDataMatchCache(endpoint);
     }
 
     private boolean isDataMatchCache(Endpoint endpoint) {

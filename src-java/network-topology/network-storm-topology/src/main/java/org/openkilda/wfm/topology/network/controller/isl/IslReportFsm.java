@@ -26,8 +26,6 @@ import org.squirrelframework.foundation.fsm.impl.AbstractStateMachine;
 @Slf4j
 public class IslReportFsm extends
         AbstractStateMachine<IslReportFsm, IslReportFsm.State, IslReportFsm.Event, Object> {
-    private final NetworkTopologyDashboardLogger dashboardLogger;
-
     private final IslReference islReference;
 
     public static IslReportFsmFactory factory(NetworkTopologyDashboardLogger.Builder dashboardLoggerBuilder) {
@@ -43,13 +41,6 @@ public class IslReportFsm extends
         dashboardLogger.onIslUp(islReference);
     }
 
-    public void downEnter(State from, State to, Event event, Object context) {
-        dashboardLogger.onIslDown(islReference);
-    }
-
-    public void movedEnter(State from, State to, Event event, Object context) {
-        dashboardLogger.onIslMoved(islReference);
-    }
 
     public static class IslReportFsmFactory {
         private final NetworkTopologyDashboardLogger.Builder dashboardLoggerBuilder;

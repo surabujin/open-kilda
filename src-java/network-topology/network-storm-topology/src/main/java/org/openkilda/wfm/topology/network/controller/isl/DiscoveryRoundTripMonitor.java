@@ -16,11 +16,13 @@
 package org.openkilda.wfm.topology.network.controller.isl;
 
 import org.openkilda.model.Isl;
+import org.openkilda.model.IslDownReason;
 import org.openkilda.model.IslStatus;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmContext;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmEvent;
+import org.openkilda.wfm.topology.network.model.IslEndpointRoundTripStatus;
 import org.openkilda.wfm.topology.network.model.NetworkOptions;
 import org.openkilda.wfm.topology.network.model.RoundTripStatus;
 
@@ -30,7 +32,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
-public class DiscoveryRoundTripMonitor extends DiscoveryMonitor<Instant> {
+public class DiscoveryRoundTripMonitor extends DiscoveryMonitor<IslEndpointRoundTripStatus> {
     private final Clock clock;
     private final Duration roundTripExpirationTime;
 
@@ -41,20 +43,11 @@ public class DiscoveryRoundTripMonitor extends DiscoveryMonitor<Instant> {
     }
 
     @Override
-    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
-        Endpoint endpoint = context.getEndpoint();
-        if (event == IslFsmEvent.ROUND_TRIP_STATUS) {
-            Instant update = evaluateExpireAtTime(context.getRoundTripStatus());
-            discoveryData.put(endpoint, update);
-        }
-    }
-
-    @Override
     public Optional<IslStatus> evaluateStatus() {
-        Instant now = Instant.now(clock);
         boolean isActive = discoveryData.stream()
                 .filter(Objects::nonNull)
-                .anyMatch(now::isBefore);
+                .map(IslEndpointRoundTripStatus::getStatus)
+                .anyMatch(entry -> entry == IslStatus.ACTIVE);
         if (isActive) {
             return Optional.of(IslStatus.ACTIVE);
         }
@@ -62,8 +55,34 @@ public class DiscoveryRoundTripMonitor extends DiscoveryMonitor<Instant> {
     }
 
     @Override
-    public void sync(Endpoint endpoint, Isl persistentView) {
-        // TODO
+    public IslDownReason getDownReason() {
+        return null;  // this monitor can't produce down state
+    }
+
+    @Override
+    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
+        if (event == IslFsmEvent.ROUND_TRIP_STATUS) {
+            Instant expireAt = evaluateExpireAtTime(context.getRoundTripStatus());
+            updateEndpointStatus(context.getEndpoint(), expireAt);
+        }
+    }
+
+    @Override
+    public void actualFlush(Endpoint endpoint, Isl persistentView) {
+        IslEndpointRoundTripStatus roundTripStatus = discoveryData.get(endpoint);
+        if (roundTripStatus != null) {
+            persistentView.setRoundTripStatus(roundTripStatus.getStatus());
+        }
+    }
+
+    private void updateEndpointStatus(Endpoint endpoint, Instant expireAt) {
+        if (expireAt != null) {
+            IslStatus status = clock.instant().isBefore(expireAt)
+                    ? IslStatus.ACTIVE : IslStatus.INACTIVE;
+            discoveryData.put(endpoint, new IslEndpointRoundTripStatus(expireAt, status));
+        } else if (discoveryData.get(endpoint) != null) {
+            discoveryData.put(endpoint, new IslEndpointRoundTripStatus(null, IslStatus.INACTIVE));
+        }
     }
 
     private Instant evaluateExpireAtTime(RoundTripStatus status) {

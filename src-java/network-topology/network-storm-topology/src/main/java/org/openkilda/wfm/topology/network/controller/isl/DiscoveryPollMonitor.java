@@ -16,20 +16,24 @@
 package org.openkilda.wfm.topology.network.controller.isl;
 
 import org.openkilda.model.Isl;
+import org.openkilda.model.IslDownReason;
 import org.openkilda.model.IslStatus;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmContext;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmEvent;
 import org.openkilda.wfm.topology.network.model.IslDataHolder;
-import org.openkilda.wfm.topology.network.model.IslPollStatus;
+import org.openkilda.wfm.topology.network.model.IslEndpointPollStatus;
+
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
 
-public class DiscoveryPollMonitor extends DiscoveryMonitor<IslPollStatus> {
+@Slf4j
+public class DiscoveryPollMonitor extends DiscoveryMonitor<IslEndpointPollStatus> {
     public DiscoveryPollMonitor(IslReference reference) {
         super(reference);
-        IslPollStatus dummy = new IslPollStatus(IslStatus.INACTIVE);
+        discoveryData.putBoth(new IslEndpointPollStatus(IslStatus.INACTIVE));
     }
 
     @Override
@@ -37,33 +41,10 @@ public class DiscoveryPollMonitor extends DiscoveryMonitor<IslPollStatus> {
         super.load(endpoint, persistentView);
 
         IslDataHolder islData = new IslDataHolder(persistentView);
-        IslPollStatus status = new IslPollStatus(islData, persistentView.getStatus());
+        IslEndpointPollStatus status = new IslEndpointPollStatus(islData, persistentView.getStatus());
 
         discoveryData.put(endpoint, status);
         cache.put(endpoint, status);
-    }
-
-    @Override
-    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
-        Endpoint endpoint = context.getEndpoint();
-        IslPollStatus update = discoveryData.get(endpoint);
-        switch (event) {
-            case ISL_UP:
-                update = new IslPollStatus(context.getIslData(), IslStatus.ACTIVE);
-                break;
-
-            case ISL_DOWN:
-                update = new IslPollStatus(update.getIslData(), IslStatus.INACTIVE);
-                break;
-
-            case ISL_MOVE:
-                update = new IslPollStatus(update.getIslData(), IslStatus.MOVED);
-                break;
-
-            default:
-                // nothing to do here
-        }
-        discoveryData.put(endpoint, update);
     }
 
     @Override
@@ -83,7 +64,66 @@ public class DiscoveryPollMonitor extends DiscoveryMonitor<IslPollStatus> {
     }
 
     @Override
-    public void sync(Endpoint endpoint, Isl persistentView) {
-        // TODO
+    public IslDownReason getDownReason() {
+        return IslDownReason.POLL_TIMEOUT;
+    }
+
+    @Override
+    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
+        Endpoint endpoint = context.getEndpoint();
+        IslEndpointPollStatus update = discoveryData.get(endpoint);
+        switch (event) {
+            case ISL_UP:
+                update = new IslEndpointPollStatus(context.getIslData(), IslStatus.ACTIVE);
+                break;
+
+            case ISL_DOWN:
+                update = new IslEndpointPollStatus(update.getIslData(), IslStatus.INACTIVE);
+                break;
+
+            case ISL_MOVE:
+                update = new IslEndpointPollStatus(update.getIslData(), IslStatus.MOVED);
+                break;
+
+            default:
+                // nothing to do here
+        }
+        discoveryData.put(endpoint, update);
+    }
+
+    @Override
+    protected void actualFlush(Endpoint endpoint, Isl persistentView) {
+        IslEndpointPollStatus pollStatus = discoveryData.get(endpoint);
+        IslDataHolder islData = makeAggregatedIslData(
+                pollStatus.getIslData(), discoveryData.get(reference.getOpposite(endpoint)).getIslData());
+        if (islData == null) {
+            log.error("There is no ISL data available for {}, unable to calculate available_bandwidth", reference);
+        } else {
+            persistentView.setSpeed(islData.getSpeed());
+            persistentView.setMaxBandwidth(islData.getMaximumBandwidth());
+            persistentView.setDefaultMaxBandwidth(islData.getEffectiveMaximumBandwidth());
+        }
+        persistentView.setActualStatus(pollStatus.getStatus());
+    }
+
+    @Override
+    protected boolean isEndpointFlushRequired(Endpoint endpoint) {
+        // change in opposite side also must trigger flush
+        return isFlushRequired();
+    }
+
+    private IslDataHolder makeAggregatedIslData(IslDataHolder local, IslDataHolder remote) {
+        IslDataHolder aggregated;
+        if (local != null) {
+            if (remote != null) {
+                aggregated = local.merge(remote);
+            } else {
+                aggregated = local;
+            }
+        } else {
+            aggregated = remote;
+        }
+
+        return aggregated;
     }
 }

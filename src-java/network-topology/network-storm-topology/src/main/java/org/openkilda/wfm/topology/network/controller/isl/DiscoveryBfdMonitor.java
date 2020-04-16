@@ -16,6 +16,7 @@
 package org.openkilda.wfm.topology.network.controller.isl;
 
 import org.openkilda.model.Isl;
+import org.openkilda.model.IslDownReason;
 import org.openkilda.model.IslStatus;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
@@ -34,19 +35,14 @@ public class DiscoveryBfdMonitor extends DiscoveryMonitor<IslEndpointBfdStatus> 
     }
 
     @Override
-    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
-
-    }
-
-    @Override
     public Optional<IslStatus> evaluateStatus() {
-        boolean isEnabled = false;
+        boolean isEnabled = true;
         boolean isUp = false;
 
         for (Iterator<IslEndpointBfdStatus> it = discoveryData.stream().iterator(); it.hasNext(); ) {
             IslEndpointBfdStatus entry = it.next();
 
-            isEnabled |= entry.isEnabled();
+            isEnabled &= entry.isEnabled();  // only if both endpoint are BFD capable we can use BFD statuses
             isUp |= entry.getStatus() == IslStatus.ACTIVE;
         }
 
@@ -57,7 +53,37 @@ public class DiscoveryBfdMonitor extends DiscoveryMonitor<IslEndpointBfdStatus> 
     }
 
     @Override
-    public void sync(Endpoint endpoint, Isl persistentView) {
-        // TODO
+    public IslDownReason getDownReason() {
+        return IslDownReason.BFD_DOWN;
+    }
+
+    @Override
+    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
+        final Endpoint endpoint = context.getEndpoint();
+        IslEndpointBfdStatus current = discoveryData.get(endpoint);
+        IslEndpointBfdStatus update = null;
+        switch (event) {
+            case BFD_UP:
+                update = new IslEndpointBfdStatus(true, IslStatus.ACTIVE);
+                break;
+            case BFD_DOWN:
+                update = new IslEndpointBfdStatus(current.isEnabled(), IslStatus.INACTIVE);
+                break;
+            case BFD_KILL:
+                update = new IslEndpointBfdStatus(false, null);
+                break;
+
+            default:
+                // nothing to do here
+        }
+
+        if (update != null) {
+            discoveryData.put(endpoint, update);
+        }
+    }
+
+    @Override
+    public void actualFlush(Endpoint endpoint, Isl persistentView) {
+        // there is no BFD related fields in ISL
     }
 }

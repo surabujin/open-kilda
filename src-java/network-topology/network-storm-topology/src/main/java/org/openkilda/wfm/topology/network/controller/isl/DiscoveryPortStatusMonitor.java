@@ -34,28 +34,6 @@ public class DiscoveryPortStatusMonitor extends DiscoveryMonitor<LinkStatus> {
     }
 
     @Override
-    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
-        LinkStatus update = null;
-        switch (event) {
-            case ISL_DOWN:
-                if (context.getDownReason() == IslDownReason.PORT_DOWN) {
-                    update = LinkStatus.DOWN;
-                }
-                break;
-            case ISL_UP:
-                update = LinkStatus.UP;
-                break;
-
-            default:
-                // nothing to do here
-        }
-
-        if (update != null) {
-            discoveryData.put(context.getEndpoint(), update);
-        }
-    }
-
-    @Override
     public Optional<IslStatus> evaluateStatus() {
         boolean isDown = discoveryData.stream()
                 .anyMatch(entry -> entry == LinkStatus.DOWN);
@@ -66,12 +44,34 @@ public class DiscoveryPortStatusMonitor extends DiscoveryMonitor<LinkStatus> {
     }
 
     @Override
-    public void sync(Endpoint endpoint, Isl persistentView) {
-        // TODO
+    public IslDownReason getDownReason() {
+        return IslDownReason.PORT_DOWN;
     }
 
     @Override
-    public boolean isSyncRequired() {
+    public void actualUpdate(IslFsmEvent event, IslFsmContext context) {
+        switch (event) {
+            case ISL_DOWN:
+                if (context.getDownReason() == IslDownReason.PORT_DOWN) {
+                    discoveryData.put(context.getEndpoint(), LinkStatus.DOWN);
+                }
+                break;
+            case ISL_UP:
+                discoveryData.putBoth(LinkStatus.UP);
+                break;
+
+            default:
+                // nothing to do here
+        }
+    }
+
+    @Override
+    public void actualFlush(Endpoint endpoint, Isl persistentView) {
+        // nothing to do here
+    }
+
+    @Override
+    public boolean isFlushRequired() {
         return false;
     }
 }
