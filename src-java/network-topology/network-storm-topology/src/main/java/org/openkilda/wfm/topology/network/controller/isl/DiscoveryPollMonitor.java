@@ -75,6 +75,7 @@ public class DiscoveryPollMonitor extends DiscoveryMonitor<IslEndpointPollStatus
         switch (event) {
             case ISL_UP:
                 update = new IslEndpointPollStatus(context.getIslData(), IslStatus.ACTIVE);
+                log.info("ISL {} data update - bind:{} - {}", reference, endpoint, update.getIslData());
                 break;
 
             case ISL_DOWN:

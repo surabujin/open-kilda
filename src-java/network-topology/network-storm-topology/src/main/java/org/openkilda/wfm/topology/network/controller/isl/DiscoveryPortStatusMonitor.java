@@ -24,13 +24,17 @@ import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmContext;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmEvent;
 import org.openkilda.wfm.topology.network.model.LinkStatus;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.Optional;
 
+@Slf4j
 public class DiscoveryPortStatusMonitor extends DiscoveryMonitor<LinkStatus> {
     public DiscoveryPortStatusMonitor(IslReference reference) {
         super(reference);
 
         discoveryData.putBoth(LinkStatus.UP);
+        cache.putBoth(LinkStatus.UP);
     }
 
     @Override
@@ -67,11 +71,17 @@ public class DiscoveryPortStatusMonitor extends DiscoveryMonitor<LinkStatus> {
 
     @Override
     public void actualFlush(Endpoint endpoint, Isl persistentView) {
-        // nothing to do here
+        if (evaluateStatus().orElse(IslStatus.ACTIVE) == IslStatus.INACTIVE) {
+            log.info("Set ISL {} ===> {} unstable time due to physical port down",
+                    Endpoint.of(persistentView.getSrcSwitch().getSwitchId(), persistentView.getSrcPort()),
+                    Endpoint.of(persistentView.getDestSwitch().getSwitchId(), persistentView.getDestPort()));
+            persistentView.setTimeUnstable(persistentView.getTimeModify());
+        }
     }
 
     @Override
-    public boolean isFlushRequired() {
-        return false;
+    protected boolean isEndpointFlushRequired(Endpoint endpoint) {
+        // change in opposite side also must trigger flush
+        return isFlushRequired();
     }
 }
