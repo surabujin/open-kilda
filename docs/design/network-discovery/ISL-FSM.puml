@@ -49,6 +49,7 @@ state OPERATIONAL {
     SET_UP_RESOURCES : enter / init attempts count from config
     SET_UP_RESOURCES : enter / send install isl rules for A-end
     SET_UP_RESOURCES : enter / send install isl rules for Z-end
+    SET_UP_RESOURCES : isl-rule-installed / mark setup done for mentioned endpoint
     SET_UP_RESOURCES : isl-rule-installed [both sides are valid] / emit _setup_done
     SET_UP_RESOURCES : isl-rule-timeout [has attempts] / emit install isl rules for timeout endpoint
     SET_UP_RESOURCES : isl-rule-timeout [!has attempts] / emit _setup_done
@@ -58,13 +59,13 @@ state OPERATIONAL {
     ACTIVE --> MOVED : _become_moved
     ACTIVE : enter / persist state
     ACTIVE : enter [enable_bfd in DB is set] / emit bisl-bfd-enable
-    ACTIVE : exit / emit bisl-down
+    ACTIVE : enter / emit reroute-down
     ACTIVE : _flush / persist discovery data
 
     INACTIVE --> SET_UP_RESOURCES : _become_up
     INACTIVE -d-> MOVED : _become_moved
     INACTIVE : enter / persist state
-    INACTIVE : enter / emit isl-up
+    INACTIVE : enter / emit isl-down
     INACTIVE : enter / emit reroute-affected
     INACTIVE : _flush / persist discovery data
 
@@ -78,16 +79,16 @@ state OPERATIONAL {
 OPERATIONAL --> CLEAN_UP_RESOURCES : isl-remove [effective_status == INACTIVE]
 OPERATIONAL : enter / load persisted state
 OPERATIONAL : isl-(up|down|move) / evaluate-state (can emit sync and|or _become_(up|down|moved))
-OPERATIONAL : bfd-(up|down) / evaluate-state (can emit sync and|or _become_(up|down))
+OPERATIONAL : bfd-(up|down|kill) / evaluate-state (can emit sync and|or _become_(up|down))
 OPERATIONAL : round-trip-status / evaluate-state (can emit sync and|or _become_(up|down))
 
 CLEAN_UP_RESOURCES : enter / init attempts count from config
 CLEAN_UP_RESOURCES : enter / send remove isl rules for A-end endpoint
 CLEAN_UP_RESOURCES : enter / send remove isl rules for Z-end endpoint
+CLEAN_UP_RESOURCES : isl-rule-installed / mark remove done for mentioned endpoint
 CLEAN_UP_RESOURCES : isl-rule-removed [both endpoints are valid] / emit isl-remove-finished
 CLEAN_UP_RESOURCES : isl-rule-timeout [has attempts] / emit remove isl rules for timeout endpoint
 CLEAN_UP_RESOURCES : isl-rule-timeout [!has attempts] / emit isl-remove-finished
-CLEAN_UP_RESOURCES : isl-rule-failed [has attempts] / resend remove commands
 CLEAN_UP_RESOURCES --> DELETED : _resources_done
 
 DELETED -> [*]

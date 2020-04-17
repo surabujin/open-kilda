@@ -150,12 +150,6 @@ public class SpeakerRouter extends AbstractBolt {
         } else if (payload instanceof BfdSessionResponse) {
             emit(STREAM_WORKER_ID, input, makeWorkerTuple(new SpeakerBfdSessionResponseCommand(
                     input.getStringByField(FIELD_ID_KEY), (BfdSessionResponse) payload)));
-        } else if (payload instanceof InstallIslDefaultRulesResult) {
-            emit(STREAM_ISL_ID, input, makeIslTuple(input, new IslDefaultRuleCreatedCommand(
-                    (InstallIslDefaultRulesResult) payload)));
-        } else if (payload instanceof RemoveIslDefaultRulesResult) {
-            emit(STREAM_ISL_ID, input, makeIslTuple(input, new IslDefaultRuleRemovedCommand(
-                    (RemoveIslDefaultRulesResult) payload)));
         } else if (payload instanceof IslBfdFlagUpdated) {
             // FIXME(surabujin): is it ok to consume this "event" from speaker stream?
             emit(STREAM_ISL_ID, input, makeIslTuple(input, new IslBfdFlagUpdatedCommand((IslBfdFlagUpdated) payload)));

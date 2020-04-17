@@ -20,6 +20,7 @@ import org.openkilda.model.IslDownReason;
 import lombok.Data;
 import lombok.Getter;
 
+// TODO - del?
 @Data
 public class IslEndpointStatus {
     @Getter

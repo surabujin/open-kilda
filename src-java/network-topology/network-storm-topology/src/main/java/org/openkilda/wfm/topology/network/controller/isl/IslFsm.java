@@ -81,7 +81,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     private final List<DiscoveryMonitor<?>> monitorsByPriority;
 
-    private final BiIslDataHolder<Boolean> endpointMultiTableSetupCompleteStatus;
+    private final BiIslDataHolder<Boolean> endpointMultiTableManagementCompleteStatus;
 
     private final NetworkTopologyDashboardLogger dashboardLogger;
 
@@ -123,7 +123,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                 new DiscoveryRoundTripMonitor(reference, clock, options),
                 new DiscoveryPollMonitor(reference));
 
-        endpointMultiTableSetupCompleteStatus = new BiIslDataHolder<>(reference);
+        endpointMultiTableManagementCompleteStatus = new BiIslDataHolder<>(reference);
 
         this.dashboardLogger = dashboardLogger;
 
@@ -167,7 +167,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         emitBecomeStateEvent(context);
     }
 
-    public void updateMonitors(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+    public void updateMonitorsAction(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         boolean isSyncRequired = false;
         for (DiscoveryMonitor<?> entry : monitorsByPriority) {
             isSyncRequired |= entry.update(event, context);
@@ -184,20 +184,57 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         flushTransaction();
     }
 
+    public void removeAttempt(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        if (effectiveStatus != IslStatus.ACTIVE) {
+            fire(IslFsmEvent._REMOVE_CONFIRMED, context);
+        }
+    }
+
+
     public void setUpResourcesEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        log.info("ISL {} initiate resources setup process", reference);
+        log.info("ISL {} initiate speaker resources setup process", reference);
 
         islRulesAttempts = options.getRulesSynchronizationAttempts();
-        endpointMultiTableSetupCompleteStatus.putBoth(false);
+        endpointMultiTableManagementCompleteStatus.putBoth(false);
 
         sendInstallMultiTable(context);
 
-        boolean isCompleted = endpointMultiTableSetupCompleteStatus.stream()
-                .filter(Objects::nonNull)
-                .allMatch(entry -> entry);
-        if (isCompleted) {
+        if (isMultiTableManagementCompleted()) {
             fire(IslFsmEvent._RESOURCES_DONE, context);
         }
+    }
+
+    // FIXME(surabujin): protect from stale responses
+    public void handleInstalledRule(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        Endpoint endpoint = context.getInstalledRulesEndpoint();
+        log.info("Receive response on speaker resource setup request for {} (endpoint {})", reference, endpoint);
+
+        if (endpoint != null) {
+            endpointMultiTableManagementCompleteStatus.put(endpoint, true);
+            if (isMultiTableManagementCompleted()) {
+                fire(IslFsmEvent._RESOURCES_DONE, context);
+            }
+        }
+    }
+
+    public void setUpResourcesTimeout(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        if (--islRulesAttempts >= 0) {
+            log.info("Retrying to install rules for multi table mode on isl {}", reference);
+            sendInstallMultiTable(context);
+        } else {
+            log.warn("Failed to install rules for multi table mode on isl {}, required manual rule sync",
+                    reference);
+            fire(IslFsmEvent._RESOURCES_DONE, context);
+        }
+    }
+
+    public void activeEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        dashboardLogger.onIslUp(reference);
+
+        flushTransaction();
+        sendBfdEnable(context.getOutput());
+
+        triggerDownFlowReroute(context);
     }
 
     public void inactiveEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
@@ -217,16 +254,43 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         triggerAffectedFlowReroute(context);
     }
 
-    public void handleInstalledRule(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        Endpoint installedRulesEndpoint = context.getInstalledRulesEndpoint();
-        if (installedRulesEndpoint != null) {
-            endpointStatus.get(installedRulesEndpoint).setHasIslRules(true);
-        }
+    public void cleanUpResourcesEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        log.info("ISL {} initiate speaker resources removal process", reference);
 
-        if (endpointStatus.getForward().isHasIslRules() && endpointStatus.getReverse().isHasIslRules()) {
-            fire(IslFsmEvent.ISL_UP, context);
+        islRulesAttempts = options.getRulesSynchronizationAttempts();
+        endpointMultiTableManagementCompleteStatus.putBoth(false);
+
+        sendRemoveMultiTable(context);
+
+        if (isMultiTableManagementCompleted()) {
+            fire(IslFsmEvent._RESOURCES_DONE, context);
         }
     }
+
+    // FIXME(surabujin): protect from stale responses
+    public void handleRemovedRule(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        Endpoint endpoint = context.getRemovedRulesEndpoint();
+        log.info("Receive response on speaker resource setup request for {} (endpoint {})", reference, endpoint);
+
+        if (endpoint != null) {
+            endpointMultiTableManagementCompleteStatus.put(endpoint, true);
+            if (isMultiTableManagementCompleted()) {
+                fire(IslFsmEvent._RESOURCES_DONE, context);
+            }
+        }
+    }
+
+    public void cleanUpResourcesTimeout(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        if (--islRulesAttempts >= 0) {
+            log.info("Retrying to remove rules for multi table mode on isl {}", reference);
+            sendRemoveMultiTable(context);
+        } else {
+            log.warn("Failed to remove rules for multi table mode on isl {}, required manual rule sync",
+                    reference);
+            fire(IslFsmEvent._RESOURCES_DONE, context);
+        }
+    }
+
 
     // FIXME - {{{
     public void historyRestoreUp(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
@@ -261,48 +325,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         fire(route, context);
     }
 
-    public void setUpResourcesTimeout(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        islRulesAttempts -= 1;
-        if (islRulesAttempts >= 0) {
-            log.info("Retrying to install rules for multi table mode on isl {}", discoveryFacts.getReference());
-            sendInstallMultitable(context);
-        } else {
-            log.warn("Failed to install rules for multi table mode on isl {}, required manual rule sync",
-                    discoveryFacts.getReference());
-            endpointStatus.getForward().setHasIslRules(true);
-            endpointStatus.getReverse().setHasIslRules(true);
-            fire(IslFsmEvent.ISL_UP, context);
-        }
-    }
-
-    public void cleanUpResourcesTimeout(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        islRulesAttempts -= 1;
-        if (islRulesAttempts >= 0) {
-            log.info("Retrying to remove rules for multi table mode on isl {}", discoveryFacts.getReference());
-            sendRemoveMultitable(context);
-        } else {
-            log.warn("Failed to remove rules for multi table mode on isl {}, required manual rule sync",
-                    discoveryFacts.getReference());
-            endpointStatus.getForward().setHasIslRules(false);
-            endpointStatus.getReverse().setHasIslRules(false);
-            fire(IslFsmEvent.ISL_REMOVE_FINISHED, context);
-        }
-    }
-
-    public void upEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        reportFsm.fire(IslReportFsm.Event.BECOME_UP);
-
-        saveAllTransaction();
-        sendBfdEnable(context.getOutput());
-
-        if (!ignoreRerouteOnUp) {
-            // Do not produce reroute during recovery system state from DB
-            triggerDownFlowReroute(context);
-        } else {
-            ignoreRerouteOnUp = false;
-        }
-    }
-
     public void upHandlePhysicalDown(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         updateEndpointStatusByEvent(event, context);
         saveStatusAndSetIslUnstableTimeTransaction();
@@ -332,30 +354,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         }
     }
 
-    public void cleanUpResourcesEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        islRulesAttempts = options.getRulesSynchronizationAttempts();
-        sendRemoveMultitable(context);
-    }
-
-    public void handleRemovedRule(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        Endpoint removedRulesEndpoint = context.getRemovedRulesEndpoint();
-        if (removedRulesEndpoint != null) {
-            endpointStatus.get(removedRulesEndpoint).setHasIslRules(false);
-        }
-
-        if (!endpointStatus.getForward().isHasIslRules() && !endpointStatus.getReverse().isHasIslRules()) {
-            fire(IslFsmEvent.ISL_REMOVE_FINISHED, context);
-        }
-
-    }
-
-    public void removeAttempt(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
-        // FIXME(surabujin): this check is always true, because it is called from DOWN or MOVED state
-        if (evaluateStatus() != IslEndpointStatus.Status.UP) {
-            fire(IslFsmEvent._ISL_REMOVE_SUCCESS, context);
-        }
-    }
-
     // -- private/service methods --
 
     private void sendInstallMultiTable(IslFsmContext context) {
@@ -366,47 +364,38 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     }
 
     private void sendInstallMultiTable(IIslCarrier carrier, Endpoint ingress, Endpoint egress) {
-        Optional<SwitchProperties> switchProperties = switchPropertiesRepository
-                .findBySwitchId(ingress.getDatapath());
-        if (switchProperties.map(SwitchProperties::isMultiTable).orElse(false)) {
+        Boolean isCompleted = endpointMultiTableManagementCompleteStatus.get(ingress);
+        if (isCompleted != null && isCompleted) {
+            return;
+        }
+
+        if (isSwitchInMultiTableMode(ingress.getDatapath())) {
             carrier.islDefaultRulesInstall(ingress, egress);
         } else {
-            endpointMultiTableSetupCompleteStatus.put(ingress, true);
+            endpointMultiTableManagementCompleteStatus.put(ingress, true);
         }
     }
 
-    private void sendRemoveMultitable(IslFsmContext context) {
-        SwitchId sourceSwitchId = discoveryFacts.getReference().getSource().getDatapath();
-        int sourcePort = discoveryFacts.getReference().getSource().getPortNumber();
-        Optional<SwitchProperties> sourceSwitchFeatures = switchPropertiesRepository
-                .findBySwitchId(sourceSwitchId);
-        boolean waitForSource = false;
-        if (sourceSwitchFeatures.isPresent() && sourceSwitchFeatures.get().isMultiTable()) {
-            if (islRepository.findByEndpoint(sourceSwitchId, sourcePort).isEmpty()) {
-                context.getOutput().islDefaultRulesDelete(discoveryFacts.getReference().getSource(),
-                        discoveryFacts.getReference().getDest());
-                waitForSource = true;
-            }
-        } else {
-            endpointStatus.get(discoveryFacts.getReference().getSource()).setHasIslRules(false);
-        }
-        SwitchId destSwitchId = discoveryFacts.getReference().getDest().getDatapath();
-        int destPort = discoveryFacts.getReference().getDest().getPortNumber();
-        Optional<SwitchProperties> destSwitchFeatures = switchPropertiesRepository
-                .findBySwitchId(destSwitchId);
-        boolean waitForDest = false;
-        if (destSwitchFeatures.isPresent() && destSwitchFeatures.get().isMultiTable()) {
-            if (islRepository.findByEndpoint(destSwitchId, destPort).isEmpty()) {
-                context.getOutput().islDefaultRulesDelete(discoveryFacts.getReference().getDest(),
-                          discoveryFacts.getReference().getSource());
-                waitForDest = true;
-            }
-        } else {
-            endpointStatus.get(discoveryFacts.getReference().getDest()).setHasIslRules(false);
+    private void sendRemoveMultiTable(IslFsmContext context) {
+        final Endpoint source = reference.getSource();
+        final Endpoint dest = reference.getDest();
+        sendRemoveMultiTable(context.getOutput(), source, dest);
+        sendRemoveMultiTable(context.getOutput(), dest, source);
+    }
+
+    private void sendRemoveMultiTable(IIslCarrier carrier, Endpoint ingress, Endpoint egress) {
+        Boolean isCompleted = endpointMultiTableManagementCompleteStatus.get(ingress);
+        if (isCompleted != null && isCompleted) {
+            return;
         }
 
-        if (!waitForSource && !waitForDest) {
-            fire(IslFsmEvent.ISL_RULE_REMOVED, context);
+        // TODO(surabujin): why for we need this check?
+        boolean isIslRemoved = islRepository.findByEndpoint(ingress.getDatapath(), ingress.getPortNumber())
+                .isEmpty();
+        if (isSwitchInMultiTableMode(ingress.getDatapath()) && isIslRemoved) {
+                carrier.islDefaultRulesDelete(ingress, egress);
+        } else {
+            endpointMultiTableManagementCompleteStatus.put(ingress, true);
         }
     }
 
@@ -716,6 +705,19 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                 || isPerIslBfdToggleEnabled(reference.getDest(), reference.getSource());
     }
 
+    private boolean isSwitchInMultiTableMode(SwitchId switchId) {
+        return switchPropertiesRepository
+                .findBySwitchId(switchId)
+                .map(SwitchProperties::isMultiTable)
+                .orElse(false);
+    }
+
+    private boolean isMultiTableManagementCompleted() {
+        return endpointMultiTableManagementCompleteStatus.stream()
+                .filter(Objects::nonNull)
+                .allMatch(entry -> entry);
+    }
+
     private boolean isPerIslBfdToggleEnabled(Endpoint source, Endpoint dest) {
         return loadIsl(source, dest)
                 .map(Isl::isEnableBfd)
@@ -760,34 +762,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         return humanReason;
     }
 
-    private static IslStatus mapStatus(IslEndpointStatus.Status status) {
-        switch (status) {
-            case UP:
-                return IslStatus.ACTIVE;
-            case DOWN:
-                return IslStatus.INACTIVE;
-            case MOVED:
-                return IslStatus.MOVED;
-            default:
-                throw new IllegalArgumentException(
-                        makeInvalidMappingMessage(IslEndpointStatus.Status.class, IslStatus.class, status));
-        }
-    }
-
-    private static IslEndpointStatus.Status mapStatus(IslStatus status) {
-        switch (status) {
-            case ACTIVE:
-                return IslEndpointStatus.Status.UP;
-            case INACTIVE:
-                return IslEndpointStatus.Status.DOWN;
-            case MOVED:
-                return IslEndpointStatus.Status.MOVED;
-            default:
-                throw new IllegalArgumentException(
-                        makeInvalidMappingMessage(IslStatus.class, IslEndpointStatus.Status.class, status));
-        }
-    }
-
     private static String makeInvalidMappingMessage(Class<?> from, Class<?> to, Object value) {
         return String.format("There is no mapping defined between %s and %s for %s", from.getName(),
                              to.getName(), value);
@@ -827,19 +801,37 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     Clock.class, PersistenceManager.class, NetworkTopologyDashboardLogger.class, BfdManager.class,
                     NetworkOptions.class, IslReference.class);
 
-            final String updateMonitorsMethod = "updateMonitors";
+            final String updateMonitorsActionMethod = "updateMonitorsAction";
             final String flushActionMethod = "flushAction";
 
             // OPERATIONAL
-            builder.onEntry(IslFsmState.OPERATIONAL)
-                    .callMethod("loadPersistedState");
-            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ISL_UP)
-                    .callMethod(updateMonitorsMethod);
             builder.defineSequentialStatesOn(
                     IslFsmState.OPERATIONAL,
                     IslFsmState.PENDING,
                     IslFsmState.ACTIVE, IslFsmState.INACTIVE, IslFsmState.MOVED,
                     IslFsmState.SET_UP_RESOURCES);
+
+            builder.transition()
+                    .from(IslFsmState.OPERATIONAL).to(IslFsmState.CLEAN_UP_RESOURCES)
+                    .on(IslFsmEvent._REMOVE_CONFIRMED);
+            builder.onEntry(IslFsmState.OPERATIONAL)
+                    .callMethod("loadPersistedState");
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ISL_UP)
+                    .callMethod(updateMonitorsActionMethod);
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ISL_DOWN)
+                    .callMethod(updateMonitorsActionMethod);
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ISL_MOVE)
+                    .callMethod(updateMonitorsActionMethod);
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.BFD_UP)
+                    .callMethod(updateMonitorsActionMethod);
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.BFD_DOWN)
+                    .callMethod(updateMonitorsActionMethod);
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.BFD_KILL)
+                    .callMethod(updateMonitorsActionMethod);
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ROUND_TRIP_STATUS)
+                    .callMethod(updateMonitorsActionMethod);
+            builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ISL_REMOVE)
+                    .callMethod("removeAttempt");
 
             // PENDING
             builder.transition()
@@ -850,16 +842,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     .from(IslFsmState.PENDING).to(IslFsmState.MOVED).on(IslFsmEvent._BECOME_MOVED);
             builder.internalTransition().within(IslFsmState.PENDING).on(IslFsmEvent._FLUSH)
                     .callMethod(flushActionMethod);
-
-            // ACTIVE
-
-            // INACTIVE
-            builder.onEntry(IslFsmState.INACTIVE)
-                    .callMethod("inactiveEnter");
-
-            // MOVED
-            builder.onEntry(IslFsmState.MOVED)
-                    .callMethod("movedEnter");
 
             // SET_UP_RESOURCES
             builder.transition()
@@ -873,8 +855,50 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
             builder.internalTransition()
                     .within(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent.ISL_RULE_INSTALLED)
                     .callMethod("handleInstalledRule");
+            builder.internalTransition()
+                    .within(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent.ISL_RULE_TIMEOUT)
+                    .callMethod("setUpResourcesTimeout");
+            builder.internalTransition().within(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent._FLUSH)
+                    .callMethod(flushActionMethod);
+
+            // ACTIVE
+            builder.transition()
+                    .from(IslFsmState.ACTIVE).to(IslFsmState.INACTIVE).on(IslFsmEvent._BECOME_DOWN);
+            builder.transition()
+                    .from(IslFsmState.ACTIVE).to(IslFsmState.MOVED).on(IslFsmEvent._BECOME_MOVED);
+            builder.onEntry(IslFsmState.ACTIVE)
+                    .callMethod("activeEnter");
+            builder.internalTransition().within(IslFsmState.ACTIVE).on(IslFsmEvent._FLUSH)
+                    .callMethod(flushActionMethod);
+
+            // INACTIVE
+            builder.transition()
+                    .from(IslFsmState.INACTIVE).to(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent._BECOME_UP);
+            builder.transition()
+                    .from(IslFsmState.INACTIVE).to(IslFsmState.MOVED).on(IslFsmEvent._BECOME_MOVED);
+            builder.onEntry(IslFsmState.INACTIVE)
+                    .callMethod("inactiveEnter");
+            builder.internalTransition().within(IslFsmState.INACTIVE).on(IslFsmEvent._FLUSH)
+                    .callMethod(flushActionMethod);
+
+            // MOVED
+            builder.transition()
+                    .from(IslFsmState.MOVED).to(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent._BECOME_UP);
+            builder.onEntry(IslFsmState.MOVED)
+                    .callMethod("movedEnter");
+            builder.internalTransition().within(IslFsmState.MOVED).on(IslFsmEvent._FLUSH)
+                    .callMethod(flushActionMethod);
 
             // CLEAN_UP_RESOURCES
+            builder.transition()
+                    .from(IslFsmState.CLEAN_UP_RESOURCES).to(IslFsmState.DELETED).on(IslFsmEvent._RESOURCES_DONE);
+            builder.onEntry(IslFsmState.CLEAN_UP_RESOURCES).callMethod("cleanUpResourcesEnter");
+            builder.internalTransition()
+                    .within(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent.ISL_RULE_REMOVED)
+                    .callMethod("handleRemovedRule");
+            builder.internalTransition()
+                    .within(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent.ISL_RULE_TIMEOUT)
+                    .callMethod("cleanUpResourcesTimeout");
 
             // DELETED
             builder.defineFinalState(IslFsmState.DELETED);
@@ -914,9 +938,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
             builder.internalTransition()
                     .within(IslFsmState.DOWN).on(IslFsmEvent.ISL_DOWN)
                     .callMethod(updateAndPersistEndpointStatusMethod);
-            builder.internalTransition()
-                    .within(IslFsmState.DOWN).on(IslFsmEvent.ISL_REMOVE)
-                    .callMethod("removeAttempt");
             builder.transition()
                     .from(IslFsmState.DOWN).to(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent._ISL_REMOVE_SUCCESS);
 
@@ -936,9 +957,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     .callMethod(updateEndpointStatusMethod);
             builder.transition()
                     .from(IslFsmState.SET_UP_RESOURCES).to(IslFsmState.UP).on(IslFsmEvent.ISL_UP);
-            builder.internalTransition()
-                    .within(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent.ISL_RULE_TIMEOUT)
-                    .callMethod("setUpResourcesTimeout");
 
 
             // UP
@@ -991,17 +1009,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     .from(IslFsmState.MOVED).to(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent._ISL_REMOVE_SUCCESS);
             builder.onEntry(IslFsmState.MOVED)
                     .callMethod("movedEnter");
-
-            // CLEAN_UP_RESOURCES
-            builder.onEntry(IslFsmState.CLEAN_UP_RESOURCES).callMethod("cleanUpResourcesEnter");
-            builder.internalTransition()
-                    .within(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent.ISL_RULE_REMOVED)
-                    .callMethod("handleRemovedRule");
-            builder.transition().from(IslFsmState.CLEAN_UP_RESOURCES).to(IslFsmState.DELETED)
-                    .on(IslFsmEvent.ISL_REMOVE_FINISHED);
-            builder.internalTransition()
-                    .within(IslFsmState.CLEAN_UP_RESOURCES).on(IslFsmEvent.ISL_RULE_TIMEOUT)
-                    .callMethod("cleanUpResourcesTimeout");
             // FIXME - }}}
         }
 
@@ -1033,8 +1040,8 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         private IslDataHolder islData;
 
         private IslDownReason downReason;
-        private Endpoint installedRulesEndpoint;
-        private Endpoint removedRulesEndpoint;
+        private Endpoint installedRulesEndpoint;  // FIXME - garbage - must use `endpoint`
+        private Endpoint removedRulesEndpoint;    // FIXME - garbage - must use `endpoint`
         private Boolean bfdEnable;
 
         private RoundTripStatus roundTripStatus;
@@ -1055,15 +1062,16 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         _FLUSH,
         _BECOME_UP, _BECOME_DOWN, _BECOME_MOVED,
         _RESOURCES_DONE,
+        _REMOVE_CONFIRMED,
         BFD_UP, BFD_DOWN, BFD_KILL,  // TODO - inject
 
         // FIXME - {{{
         HISTORY, _HISTORY_DOWN, _HISTORY_UP, _HISTORY_MOVED,
         ISL_UP, ISL_DOWN, ISL_MOVE, ROUND_TRIP_STATUS,
 
-        _UP_ATTEMPT_SUCCESS, ISL_REMOVE, ISL_REMOVE_FINISHED, _ISL_REMOVE_SUCCESS, _UP_ATTEMPT_FAIL,
-        ISL_RULE_INSTALLED, ISL_RULE_INSTALL_FAILED,
-        ISL_RULE_REMOVED, ISL_RULE_REMOVE_FAILED,
+        _UP_ATTEMPT_SUCCESS, ISL_REMOVE, ISL_REMOVE_FINISHED, _UP_ATTEMPT_FAIL,
+        ISL_RULE_INSTALLED,
+        ISL_RULE_REMOVED,
         ISL_RULE_TIMEOUT,
         ISL_MULTI_TABLE_MODE_UPDATED,
         // FIXME - }}}
