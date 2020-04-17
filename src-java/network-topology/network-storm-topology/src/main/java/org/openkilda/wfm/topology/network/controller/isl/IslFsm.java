@@ -81,6 +81,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     private IslStatus effectiveStatus = IslStatus.INACTIVE;
     private IslDownReason downReason;
     private long islRulesAttempts;
+    private boolean rerouteNotificationSuppressed = false;
 
     private final List<DiscoveryMonitor<?>> monitorsByPriority;
 
@@ -97,8 +98,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     private final SwitchPropertiesRepository switchPropertiesRepository;
 
     private final RetryPolicy transactionRetryPolicy;
-
-    private boolean ignoreRerouteOnUp = false;  // FIXME - reimplement
 
     public static IslFsmFactory factory(Clock clock, PersistenceManager persistenceManager,
                                         NetworkTopologyDashboardLogger.Builder dashboardLoggerBuilder) {
@@ -138,7 +137,14 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     // -- FSM actions --
 
-    public void loadPersistedState(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+    public void unsetNotificationSuppressionAction(
+            IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        rerouteNotificationSuppressed = false;
+    }
+
+    public void operationalEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        rerouteNotificationSuppressed = true;
+
         transactionManager.doInTransaction(() -> {
             loadPersistentData(reference.getSource(), reference.getDest());
             loadPersistentData(reference.getDest(), reference.getSource());
@@ -208,13 +214,15 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         }
     }
 
-    public void activeEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+    public void usableEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         dashboardLogger.onIslUp(reference);
 
         flushTransaction();
         sendBfdEnable(context.getOutput());
 
-        triggerDownFlowReroute(context);
+        if (! rerouteNotificationSuppressed) {
+            triggerDownFlowReroute(context);
+        }
     }
 
     public void inactiveEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
@@ -222,7 +230,9 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         flushTransaction();
 
         sendIslStatusUpdateNotification(context, IslStatus.INACTIVE);
-        triggerAffectedFlowReroute(context);
+        if (! rerouteNotificationSuppressed) {
+            triggerAffectedFlowReroute(context);
+        }
     }
 
     public void movedEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
@@ -231,7 +241,9 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
         bfdManager.disable(context.getOutput());
         sendIslStatusUpdateNotification(context, IslStatus.MOVED);
-        triggerAffectedFlowReroute(context);
+        if (! rerouteNotificationSuppressed) {
+            triggerAffectedFlowReroute(context);
+        }
     }
 
     public void cleanUpResourcesEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
@@ -569,7 +581,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                 .orElse(false);
     }
 
-    // FIXME - {{{
     private boolean isMultiTableManagementCompleted() {
         return endpointMultiTableManagementCompleteStatus.stream()
                 .filter(Objects::nonNull)
@@ -635,7 +646,6 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         Anchor dest;
     }
 
-    // FIXME - }}}
     public static class IslFsmFactory {
         private final Clock clock;
 
@@ -657,6 +667,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     Clock.class, PersistenceManager.class, NetworkTopologyDashboardLogger.class, BfdManager.class,
                     NetworkOptions.class, IslReference.class);
 
+            final String unsetNotificationSuppressionActionMethod = "unsetNotificationSuppressionAction";
             final String updateMonitorsActionMethod = "updateMonitorsAction";
             final String flushActionMethod = "flushAction";
 
@@ -671,7 +682,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
                     .from(IslFsmState.OPERATIONAL).to(IslFsmState.CLEAN_UP_RESOURCES)
                     .on(IslFsmEvent._REMOVE_CONFIRMED);
             builder.onEntry(IslFsmState.OPERATIONAL)
-                    .callMethod("loadPersistedState");
+                    .callMethod("operationalEnter");
             builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ISL_UP)
                     .callMethod(updateMonitorsActionMethod);
             builder.internalTransition().within(IslFsmState.OPERATIONAL).on(IslFsmEvent.ISL_DOWN)
@@ -691,7 +702,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
             // PENDING
             builder.transition()
-                    .from(IslFsmState.PENDING).to(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent._BECOME_UP);
+                    .from(IslFsmState.PENDING).to(IslFsmState.ACTIVE).on(IslFsmEvent._BECOME_UP);
             builder.transition()
                     .from(IslFsmState.PENDING).to(IslFsmState.INACTIVE).on(IslFsmEvent._BECOME_DOWN);
             builder.transition()
@@ -699,9 +710,25 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
             builder.internalTransition().within(IslFsmState.PENDING).on(IslFsmEvent._FLUSH)
                     .callMethod(flushActionMethod);
 
+            // ACTIVE
+            builder.defineSequentialStatesOn(
+                    IslFsmState.ACTIVE,
+                    IslFsmState.SET_UP_RESOURCES, IslFsmState.USABLE);
+
+            builder.transition()
+                    .from(IslFsmState.ACTIVE).to(IslFsmState.INACTIVE).on(IslFsmEvent._BECOME_DOWN);
+            builder.transition()
+                    .from(IslFsmState.ACTIVE).to(IslFsmState.MOVED).on(IslFsmEvent._BECOME_MOVED);
+            builder.onEntry(IslFsmState.ACTIVE)
+                    .callMethod("activeEnter");
+            builder.internalTransition().within(IslFsmState.ACTIVE).on(IslFsmEvent._FLUSH)
+                    .callMethod(flushActionMethod);
+            builder.onExit(IslFsmState.ACTIVE)
+                    .callMethod(unsetNotificationSuppressionActionMethod);
+
             // SET_UP_RESOURCES
             builder.transition()
-                    .from(IslFsmState.SET_UP_RESOURCES).to(IslFsmState.ACTIVE).on(IslFsmEvent._RESOURCES_DONE);
+                    .from(IslFsmState.SET_UP_RESOURCES).to(IslFsmState.USABLE).on(IslFsmEvent._RESOURCES_DONE);
             builder.transition()
                     .from(IslFsmState.SET_UP_RESOURCES).to(IslFsmState.INACTIVE).on(IslFsmEvent._BECOME_DOWN);
             builder.transition()
@@ -717,33 +744,31 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
             builder.internalTransition().within(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent._FLUSH)
                     .callMethod(flushActionMethod);
 
-            // ACTIVE
-            builder.transition()
-                    .from(IslFsmState.ACTIVE).to(IslFsmState.INACTIVE).on(IslFsmEvent._BECOME_DOWN);
-            builder.transition()
-                    .from(IslFsmState.ACTIVE).to(IslFsmState.MOVED).on(IslFsmEvent._BECOME_MOVED);
-            builder.onEntry(IslFsmState.ACTIVE)
-                    .callMethod("activeEnter");
-            builder.internalTransition().within(IslFsmState.ACTIVE).on(IslFsmEvent._FLUSH)
-                    .callMethod(flushActionMethod);
+            // USABLE
+            builder.onEntry(IslFsmState.USABLE)
+                    .callMethod("usableEnter");
 
             // INACTIVE
             builder.transition()
-                    .from(IslFsmState.INACTIVE).to(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent._BECOME_UP);
+                    .from(IslFsmState.INACTIVE).to(IslFsmState.ACTIVE).on(IslFsmEvent._BECOME_UP);
             builder.transition()
                     .from(IslFsmState.INACTIVE).to(IslFsmState.MOVED).on(IslFsmEvent._BECOME_MOVED);
             builder.onEntry(IslFsmState.INACTIVE)
                     .callMethod("inactiveEnter");
             builder.internalTransition().within(IslFsmState.INACTIVE).on(IslFsmEvent._FLUSH)
                     .callMethod(flushActionMethod);
+            builder.onExit(IslFsmState.INACTIVE)
+                    .callMethod(unsetNotificationSuppressionActionMethod);
 
             // MOVED
             builder.transition()
-                    .from(IslFsmState.MOVED).to(IslFsmState.SET_UP_RESOURCES).on(IslFsmEvent._BECOME_UP);
+                    .from(IslFsmState.MOVED).to(IslFsmState.ACTIVE).on(IslFsmEvent._BECOME_UP);
             builder.onEntry(IslFsmState.MOVED)
                     .callMethod("movedEnter");
             builder.internalTransition().within(IslFsmState.MOVED).on(IslFsmEvent._FLUSH)
                     .callMethod(flushActionMethod);
+            builder.onExit(IslFsmState.MOVED)
+                    .callMethod(unsetNotificationSuppressionActionMethod);
 
             // CLEAN_UP_RESOURCES
             builder.transition()
@@ -808,7 +833,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         _BECOME_UP, _BECOME_DOWN, _BECOME_MOVED,
         _RESOURCES_DONE,
         _REMOVE_CONFIRMED,
-        BFD_UP, BFD_DOWN, BFD_KILL,  // TODO - inject
+        BFD_UP, BFD_DOWN, BFD_KILL,
 
         HISTORY, ROUND_TRIP_STATUS,
         ISL_UP, ISL_DOWN, ISL_MOVE,
@@ -819,7 +844,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
     public enum IslFsmState {
         OPERATIONAL,
-        PENDING, ACTIVE, INACTIVE, MOVED,
+        PENDING, ACTIVE, USABLE, INACTIVE, MOVED,
         SET_UP_RESOURCES, CLEAN_UP_RESOURCES,
         DELETED
     }

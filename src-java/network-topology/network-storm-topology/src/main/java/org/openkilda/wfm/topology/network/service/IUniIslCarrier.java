@@ -21,6 +21,7 @@ import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.model.IslDataHolder;
 import org.openkilda.wfm.topology.network.model.RoundTripStatus;
+import org.openkilda.wfm.topology.network.storm.bolt.bfdport.command.BfdStatus;
 
 public interface IUniIslCarrier {
     void setupIslFromHistory(Endpoint endpoint, IslReference islReference, Isl history);
@@ -33,4 +34,6 @@ public interface IUniIslCarrier {
     void notifyIslMove(Endpoint endpoint, IslReference reference);
 
     void notifyIslRoundTripStatus(IslReference reference, RoundTripStatus roundTripStatus);
+
+    void notifyBfdStatus(Endpoint endpoint, IslReference reference, BfdStatus status);
 }

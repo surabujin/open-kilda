@@ -39,6 +39,7 @@ import org.openkilda.wfm.topology.network.storm.ComponentId;
 import org.openkilda.wfm.topology.network.storm.bolt.bfdport.command.BfdPortCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.bfdport.command.BfdPortDisableCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.bfdport.command.BfdPortEnableCommand;
+import org.openkilda.wfm.topology.network.storm.bolt.bfdport.command.BfdStatus;
 import org.openkilda.wfm.topology.network.storm.bolt.isl.command.IslCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.speaker.SpeakerRouter;
 import org.openkilda.wfm.topology.network.storm.bolt.speaker.SpeakerRulesWorker;
@@ -203,6 +204,10 @@ public class IslHandler extends AbstractBolt implements IIslCarrier {
 
     public void processRoundTripStatus(IslReference reference, RoundTripStatus status) {
         service.roundTripStatusNotification(reference, status);
+    }
+
+    public void processBfdStatusUpdate(Endpoint endpoint, IslReference reference, BfdStatus status) {
+        service.bfdStatusUpdate(endpoint, reference, status);
     }
 
     public void processBfdEnableDisable(IslReference reference, IslBfdFlagUpdated payload) {

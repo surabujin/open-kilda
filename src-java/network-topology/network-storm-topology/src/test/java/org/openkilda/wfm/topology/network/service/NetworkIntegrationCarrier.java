@@ -29,6 +29,7 @@ import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.model.IslDataHolder;
 import org.openkilda.wfm.topology.network.model.LinkStatus;
 import org.openkilda.wfm.topology.network.model.RoundTripStatus;
+import org.openkilda.wfm.topology.network.storm.bolt.bfdport.command.BfdStatus;
 
 import lombok.Data;
 
@@ -222,6 +223,11 @@ public class NetworkIntegrationCarrier
     @Override
     public void notifyIslRoundTripStatus(IslReference reference, RoundTripStatus status) {
         islService.roundTripStatusNotification(reference, status);
+    }
+
+    @Override
+    public void notifyBfdStatus(Endpoint endpoint, IslReference reference, BfdStatus status) {
+        islService.bfdStatusUpdate(endpoint, reference, status);
     }
 
     public void triggerReroute(RerouteFlows trigger) {

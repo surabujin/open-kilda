@@ -15,6 +15,8 @@
 
 package org.openkilda.wfm.topology.network.service;
 
+import static java.lang.String.format;
+
 import org.openkilda.messaging.info.discovery.InstallIslDefaultRulesResult;
 import org.openkilda.messaging.info.discovery.RemoveIslDefaultRulesResult;
 import org.openkilda.messaging.info.event.IslBfdFlagUpdated;
@@ -30,8 +32,10 @@ import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmContext;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmEvent;
 import org.openkilda.wfm.topology.network.controller.isl.IslFsm.IslFsmState;
 import org.openkilda.wfm.topology.network.model.IslDataHolder;
+import org.openkilda.wfm.topology.network.model.LinkStatus;
 import org.openkilda.wfm.topology.network.model.NetworkOptions;
 import org.openkilda.wfm.topology.network.model.RoundTripStatus;
+import org.openkilda.wfm.topology.network.storm.bolt.bfdport.command.BfdStatus;
 import org.openkilda.wfm.topology.network.storm.bolt.isl.BfdManager;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -128,6 +132,29 @@ public class NetworkIslService {
                 .roundTripStatus(status)
                 .build();
         controllerExecutor.fire(islFsm, IslFsmEvent.ROUND_TRIP_STATUS, context);
+    }
+
+    public void bfdStatusUpdate(Endpoint endpoint, IslReference reference, BfdStatus status) {
+        log.debug("ISL service receive BFD status update for {} (on {}) - {}", reference, endpoint, status);
+        IslFsm islFsm = locateController(reference).fsm;
+        IslFsmEvent event;
+        switch (status) {
+            case UP:
+                event = IslFsmEvent.BFD_UP;
+                break;
+            case DOWN:
+                event = IslFsmEvent.BFD_DOWN;
+                break;
+            case KILL:
+                event = IslFsmEvent.BFD_KILL;
+                break;
+
+            default:
+                throw new IllegalArgumentException(
+                        format("Unsupported %s value %s", status.getClass().getName(), status));
+        }
+        IslFsmContext context = IslFsmContext.builder(carrier, endpoint).build();
+        controllerExecutor.fire(islFsm, event, context);
     }
 
     /**
