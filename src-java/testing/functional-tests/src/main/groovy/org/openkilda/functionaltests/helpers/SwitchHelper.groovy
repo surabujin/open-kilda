@@ -402,8 +402,12 @@ class SwitchHelper {
             Wrappers.wait(discoveryInterval + WAIT_OFFSET) {
                 def allIsls = northbound.getAllLinks()
                 swIsls.each {
-                    assert islUtils.getIslInfo(allIsls, it).get().state == IslChangeType.DISCOVERED
-                    assert islUtils.getIslInfo(allIsls, it.reversed).get().state == IslChangeType.DISCOVERED
+                    assert islUtils.getIslInfo(allIsls, it)
+                            .map({ entry -> entry.state })
+                            .orElse(IslChangeType.FAILED) == IslChangeType.DISCOVERED
+                    assert islUtils.getIslInfo(allIsls, it.reversed)
+                            .map({ entry -> entry.state })
+                            .orElse(IslChangeType.FAILED) == IslChangeType.DISCOVERED
                 }
             }
         }
