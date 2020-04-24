@@ -178,7 +178,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         islRulesAttempts = options.getRulesSynchronizationAttempts();
         endpointMultiTableManagementCompleteStatus.putBoth(false);
 
-        sendInstallMultiTable(context);
+        sendInstallMultiTable(context.getOutput());
 
         if (isMultiTableManagementCompleted()) {
             fire(IslFsmEvent._RESOURCES_DONE, context);
@@ -188,20 +188,22 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     // FIXME(surabujin): protect from stale responses
     public void handleInstalledRule(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         Endpoint endpoint = context.getInstalledRulesEndpoint();
-        log.info("Receive response on speaker resource setup request for {} (endpoint {})", reference, endpoint);
+        if (endpoint == null) {
+            throw new IllegalArgumentException(makeInvalidResourceManipulationResponseMessage());
+        }
 
-        if (endpoint != null) {
-            endpointMultiTableManagementCompleteStatus.put(endpoint, true);
-            if (isMultiTableManagementCompleted()) {
-                fire(IslFsmEvent._RESOURCES_DONE, context);
-            }
+        log.info("Receive response on ISL resource allocation request for {} (from {})",
+                reference, endpoint.getDatapath());
+        endpointMultiTableManagementCompleteStatus.put(endpoint, true);
+        if (isMultiTableManagementCompleted()) {
+            fire(IslFsmEvent._RESOURCES_DONE, context);
         }
     }
 
     public void setUpResourcesTimeout(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         if (--islRulesAttempts >= 0) {
             log.info("Retrying to install rules for multi table mode on isl {}", reference);
-            sendInstallMultiTable(context);
+            sendInstallMultiTable(context.getOutput());
         } else {
             log.warn("Failed to install rules for multi table mode on isl {}, required manual rule sync",
                     reference);
@@ -241,7 +243,7 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         islRulesAttempts = options.getRulesSynchronizationAttempts();
         endpointMultiTableManagementCompleteStatus.putBoth(false);
 
-        sendRemoveMultiTable(context);
+        sendRemoveMultiTable(context.getOutput());
 
         if (isMultiTableManagementCompleted()) {
             fire(IslFsmEvent._RESOURCES_DONE, context);
@@ -251,25 +253,31 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
     // FIXME(surabujin): protect from stale responses
     public void handleRemovedRule(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         Endpoint endpoint = context.getRemovedRulesEndpoint();
-        log.info("Receive response on speaker resource setup request for {} (endpoint {})", reference, endpoint);
+        if (endpoint == null) {
+            throw new IllegalArgumentException(makeInvalidResourceManipulationResponseMessage());
+        }
 
-        if (endpoint != null) {
-            endpointMultiTableManagementCompleteStatus.put(endpoint, true);
-            if (isMultiTableManagementCompleted()) {
-                fire(IslFsmEvent._RESOURCES_DONE, context);
-            }
+        log.info("Receive response on ISL resource release request for {} (from {})",
+                reference, endpoint.getDatapath());
+        endpointMultiTableManagementCompleteStatus.put(endpoint, true);
+        if (isMultiTableManagementCompleted()) {
+            fire(IslFsmEvent._RESOURCES_DONE, context);
         }
     }
 
     public void cleanUpResourcesTimeout(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
         if (--islRulesAttempts >= 0) {
             log.info("Retrying to remove rules for multi table mode on isl {}", reference);
-            sendRemoveMultiTable(context);
+            sendRemoveMultiTable(context.getOutput());
         } else {
             log.warn("Failed to remove rules for multi table mode on isl {}, required manual rule sync",
                     reference);
             fire(IslFsmEvent._RESOURCES_DONE, context);
         }
+    }
+
+    public void deletedEnter(IslFsmState from, IslFsmState to, IslFsmEvent event, IslFsmContext context) {
+        log.info("Isl FSM for {} have reached termination state (ready for being removed)", reference);
     }
 
     // -- private/service methods --
@@ -288,11 +296,11 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         }
     }
 
-    private void sendInstallMultiTable(IslFsmContext context) {
+    private void sendInstallMultiTable(IIslCarrier carrier) {
         final Endpoint source = reference.getSource();
         final Endpoint dest = reference.getDest();
-        sendInstallMultiTable(context.getOutput(), source, dest);
-        sendInstallMultiTable(context.getOutput(), dest, source);
+        sendInstallMultiTable(carrier, source, dest);
+        sendInstallMultiTable(carrier, dest, source);
     }
 
     private void sendInstallMultiTable(IIslCarrier carrier, Endpoint ingress, Endpoint egress) {
@@ -302,17 +310,18 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         }
 
         if (isSwitchInMultiTableMode(ingress.getDatapath())) {
+            log.info("Emit ISL resource allocation request for {} to {}", reference, ingress.getDatapath());
             carrier.islDefaultRulesInstall(ingress, egress);
         } else {
             endpointMultiTableManagementCompleteStatus.put(ingress, true);
         }
     }
 
-    private void sendRemoveMultiTable(IslFsmContext context) {
+    private void sendRemoveMultiTable(IIslCarrier carrier) {
         final Endpoint source = reference.getSource();
         final Endpoint dest = reference.getDest();
-        sendRemoveMultiTable(context.getOutput(), source, dest);
-        sendRemoveMultiTable(context.getOutput(), dest, source);
+        sendRemoveMultiTable(carrier, source, dest);
+        sendRemoveMultiTable(carrier, dest, source);
     }
 
     private void sendRemoveMultiTable(IIslCarrier carrier, Endpoint ingress, Endpoint egress) {
@@ -324,7 +333,8 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         // TODO(surabujin): why for we need this check?
         boolean isIslRemoved = islRepository.findByEndpoint(ingress.getDatapath(), ingress.getPortNumber())
                 .isEmpty();
-        if (isSwitchInMultiTableMode(ingress.getDatapath()) && isIslRemoved) {
+        if (isIslRemoved && isSwitchInMultiTableMode(ingress.getDatapath())) {
+            log.info("Emit ISL resource release request for {} to {}", reference, ingress.getDatapath());
             carrier.islDefaultRulesDelete(ingress, egress);
         } else {
             endpointMultiTableManagementCompleteStatus.put(ingress, true);
@@ -617,6 +627,12 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
         return humanReason;
     }
 
+    private String makeInvalidResourceManipulationResponseMessage() {
+        return String.format(
+                "Receive corrupted response on ISL resources allocation request for %s - endpoint info is missing",
+                reference);
+    }
+
     private static String makeInvalidMappingMessage(Class<?> from, Class<?> to, Object value) {
         return String.format("There is no mapping defined between %s and %s for %s", from.getName(),
                              to.getName(), value);
@@ -738,6 +754,9 @@ public final class IslFsm extends AbstractBaseFsm<IslFsm, IslFsmState, IslFsmEve
 
             // DELETED
             builder.defineFinalState(IslFsmState.DELETED);
+
+            builder.onEntry(IslFsmState.DELETED)
+                    .callMethod("deletedEnter");
         }
 
         public FsmExecutor<IslFsm, IslFsmState, IslFsmEvent, IslFsmContext> produceExecutor() {

@@ -202,29 +202,24 @@ public class NetworkIslService {
      */
     public void islDefaultRuleDeleted(IslReference reference, RemoveIslDefaultRulesResult payload) {
         log.debug("ISL service received isl rule removed for {} (on {})", reference, reference.getSource());
-        IslController islController = controller.get(reference);
-        if (islController == null) {
+        IslController isl = controller.get(reference);
+        if (isl == null) {
             log.info("Got clean up resources notification for not existing ISL {}", reference);
             return;
         }
-        IslFsm islFsm = islController.fsm;
         IslFsmContext context;
         if (payload.isSuccess()) {
             context = IslFsmContext.builder(carrier, reference.getSource())
                     .removedRulesEndpoint(Endpoint.of(payload.getSrcSwitch(), payload.getSrcPort()))
                     .build();
-            controllerExecutor.fire(islFsm, IslFsmEvent.ISL_RULE_REMOVED, context);
+            controllerExecutor.fire(isl.fsm, IslFsmEvent.ISL_RULE_REMOVED, context);
         } else {
-            context = IslFsmContext.builder(carrier, reference.getSource())
-                    .build();
-            controllerExecutor.fire(islFsm, IslFsmEvent.ISL_RULE_TIMEOUT, context);
+            context = IslFsmContext.builder(carrier, reference.getSource()).build();
+            controllerExecutor.fire(isl.fsm, IslFsmEvent.ISL_RULE_TIMEOUT, context);
         }
-        if (islFsm.isTerminated()) {
-            controller.remove(reference);
-            islController.bfdManager.disable(carrier);
-        }
-    }
 
+        removeIfCompleted(reference, isl);
+    }
 
     /**
      * Process isl rule timeout notification.
@@ -234,10 +229,10 @@ public class NetworkIslService {
     public void islDefaultTimeout(IslReference reference, Endpoint endpoint) {
         log.debug("ISL service received isl rule timeout notification for {} (on {})",
                 reference, reference.getSource());
-        IslFsm islFsm = locateController(reference).fsm;
-        IslFsmContext context = IslFsmContext.builder(carrier, reference.getSource())
-                .build();
-        controllerExecutor.fire(islFsm, IslFsmEvent.ISL_RULE_TIMEOUT, context);
+        IslController isl = locateController(reference);
+        IslFsmContext context = IslFsmContext.builder(carrier, reference.getSource()).build();
+        controllerExecutor.fire(isl.fsm, IslFsmEvent.ISL_RULE_TIMEOUT, context);
+        removeIfCompleted(reference, isl);
     }
 
     /**
@@ -246,23 +241,16 @@ public class NetworkIslService {
     public void remove(IslReference reference) {
         log.debug("ISL service receive remove for {}", reference);
 
-        IslController islController = controller.get(reference);
-        if (islController == null) {
+        IslController isl = controller.get(reference);
+        if (isl == null) {
             log.info("Got DELETE request for not existing ISL {}", reference);
             return;
         }
 
-        IslFsm fsm = islController.fsm;
         IslFsmContext context = IslFsmContext.builder(carrier, reference.getSource())
                 .build();
-        controllerExecutor.fire(fsm, IslFsmEvent.ISL_REMOVE, context);
-        if (fsm.isTerminated()) {
-            controller.remove(reference);
-            islController.bfdManager.disable(carrier);
-            log.info("ISL {} have been removed", reference);
-        } else {
-            log.error("ISL service remove failed for FSM {}, state: {}", reference, fsm.getCurrentState());
-        }
+        controllerExecutor.fire(isl.fsm, IslFsmEvent.ISL_REMOVE, context);
+        removeIfCompleted(reference, isl);
     }
 
     // -- private --
@@ -292,6 +280,14 @@ public class NetworkIslService {
         BfdManager bfdManager = new BfdManager(reference);
         IslFsm fsm = controllerFactory.produce(bfdManager, options, reference, context);
         return new IslController(fsm, bfdManager);
+    }
+
+    private void removeIfCompleted(IslReference reference, IslController isl) {
+        if (isl.fsm.isTerminated()) {
+            controller.remove(reference);
+            isl.bfdManager.disable(carrier);
+            log.info("ISL {} have been removed", reference);
+        }
     }
 
     @AllArgsConstructor
