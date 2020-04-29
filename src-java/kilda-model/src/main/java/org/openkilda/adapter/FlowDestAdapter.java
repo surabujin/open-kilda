@@ -20,7 +20,7 @@ import org.openkilda.model.Flow;
 import org.openkilda.model.FlowEndpoint;
 
 public class FlowDestAdapter extends FlowSideAdapter {
-    protected FlowDestAdapter(Flow flow) {
+    public FlowDestAdapter(Flow flow) {
         super(flow);
     }
 

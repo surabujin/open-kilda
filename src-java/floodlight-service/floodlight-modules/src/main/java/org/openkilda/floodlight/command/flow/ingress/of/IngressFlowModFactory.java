@@ -24,12 +24,15 @@ import org.openkilda.model.FlowEndpoint;
 import org.openkilda.model.MeterId;
 import org.openkilda.model.SwitchFeature;
 import org.openkilda.model.cookie.Cookie;
+import org.openkilda.model.cookie.FlowSharedSegmentCookie;
+import org.openkilda.model.cookie.FlowSharedSegmentCookie.SharedSegmentType;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NonNull;
 import net.floodlightcontroller.core.IOFSwitch;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
@@ -136,9 +139,12 @@ public abstract class IngressFlowModFactory {
     }
 
     public OFFlowMod makeOuterVlanMatchSharedMessage() {
+        FlowSharedSegmentCookie cookie = FlowSharedSegmentCookie.builder(SharedSegmentType.QINQ_OUTER_VLAN)
+                .uniqueId(makeOuterVlanSharedCookieId())
+                .build();
         FlowEndpoint endpoint = command.getEndpoint();
         return flowModBuilderFactory.makeBuilder(of, TableId.of(SwitchManager.PRE_INGRESS_TABLE_ID))
-                .setCookie(U64.of(metadata.getCookie().getValue()))
+                .setCookie(U64.of(cookie.getValue()))
                 .setMatch(of.buildMatch()
                         .setExact(MatchField.IN_PORT, OFPort.of(endpoint.getPortNumber()))
                         .setExact(MatchField.VLAN_VID, OFVlanVidMatch.ofVlan(endpoint.getOuterVlanId()))
@@ -232,4 +238,24 @@ public abstract class IngressFlowModFactory {
             MeterId effectiveMeterId, List<Integer> vlanStack);
 
     protected abstract List<OFInstruction> makeOuterVlanMatchInstructions();
+
+    // TODO(surabujin) - move to stage where it is safe to fail on such verification
+    private int makeOuterVlanSharedCookieId() {
+        FlowEndpoint endpoint = command.getEndpoint();
+        int vlanId = endpoint.getOuterVlanId();
+        int vlanUpperRange = 0xFFF;
+        if ((vlanId & vlanUpperRange) != vlanId) {
+            throw new IllegalArgumentException(String.format(
+                    "VLAN-id %d is not within allowed range from 0 to %d", vlanId, vlanUpperRange));
+        }
+
+        int portNumber = endpoint.getPortNumber();
+        int portUpperRange = 0xFFFF;
+        if ((portNumber & portUpperRange) != portNumber) {
+            throw new IllegalArgumentException(String.format(
+                    "Port number %d is not within allowed range from 0 to %d", portNumber, portUpperRange));
+        }
+
+        return (vlanId << 16) | portNumber;
+    }
 }

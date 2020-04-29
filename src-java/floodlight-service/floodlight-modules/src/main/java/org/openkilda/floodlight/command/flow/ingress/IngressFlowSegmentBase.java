@@ -241,6 +241,25 @@ public abstract class IngressFlowSegmentBase extends FlowSegmentCommand {
         return ofMessages;
     }
 
+    protected List<OFFlowMod> makeRemoveSharedFlowMessages() {
+        List<OFFlowMod> ofMessages = new ArrayList<>();
+        if (rulesContext != null) {
+            if (rulesContext.isRemoveCustomerCatchRule()) {
+                ofMessages.add(getFlowModFactory().makeCustomerPortSharedCatchMessage());
+            }
+            if (rulesContext.isRemoveCustomerLldpRule()) {
+                ofMessages.add(getFlowModFactory().makeLldpInputCustomerFlowMessage());
+            }
+            if (rulesContext.isRemoveCustomerArpRule()) {
+                ofMessages.add(getFlowModFactory().makeArpInputCustomerFlowMessage());
+            }
+            if (rulesContext.isRemoveOuterVlanMatchSharedRule()) {
+                ofMessages.add(getFlowModFactory().makeOuterVlanMatchSharedMessage());
+            }
+        }
+        return ofMessages;
+    }
+
     protected Set<SwitchFeature> getRequiredFeatures() {
         return new HashSet<>();
     }

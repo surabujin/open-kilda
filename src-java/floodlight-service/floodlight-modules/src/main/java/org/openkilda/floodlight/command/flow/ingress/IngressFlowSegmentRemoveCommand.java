@@ -68,19 +68,9 @@ public class IngressFlowSegmentRemoveCommand extends IngressFlowSegmentCommand {
     }
 
     @Override
-    protected List<OFFlowMod> makeIngressModMessages(MeterId effectiveMeterId) {
-        List<OFFlowMod> ofMessages = super.makeIngressModMessages(effectiveMeterId);
-        if (rulesContext != null) {
-            if (rulesContext.isRemoveCustomerCatchRule()) {
-                ofMessages.add(getFlowModFactory().makeCustomerPortSharedCatchMessage());
-            }
-            if (rulesContext.isRemoveCustomerLldpRule()) {
-                ofMessages.add(getFlowModFactory().makeLldpInputCustomerFlowMessage());
-            }
-            if (rulesContext.isRemoveCustomerArpRule()) {
-                ofMessages.add(getFlowModFactory().makeArpInputCustomerFlowMessage());
-            }
-        }
+    protected List<OFFlowMod> makeFlowModMessages(MeterId effectiveMeterId) {
+        List<OFFlowMod> ofMessages = super.makeFlowModMessages(effectiveMeterId);
+        ofMessages.addAll(makeRemoveSharedFlowMessages());
         return ofMessages;
     }
 

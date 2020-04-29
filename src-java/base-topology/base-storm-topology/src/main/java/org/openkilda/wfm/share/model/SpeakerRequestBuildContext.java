@@ -39,5 +39,6 @@ public class SpeakerRequestBuildContext {
         private boolean removeCustomerPortRule;
         private boolean removeCustomerPortLldpRule;
         private boolean removeCustomerPortArpRule;
+        private boolean removeOuterVlanMatchSharedRule;
     }
 }

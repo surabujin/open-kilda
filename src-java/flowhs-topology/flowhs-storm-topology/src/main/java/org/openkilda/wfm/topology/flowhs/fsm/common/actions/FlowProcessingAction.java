@@ -17,8 +17,12 @@ package org.openkilda.wfm.topology.flowhs.fsm.common.actions;
 
 import static java.lang.String.format;
 
+import org.openkilda.adapter.FlowDestAdapter;
+import org.openkilda.adapter.FlowSideAdapter;
+import org.openkilda.adapter.FlowSourceAdapter;
 import org.openkilda.messaging.error.ErrorType;
 import org.openkilda.model.Flow;
+import org.openkilda.model.FlowEndpoint;
 import org.openkilda.model.FlowPath;
 import org.openkilda.model.PathId;
 import org.openkilda.model.SwitchId;
@@ -35,8 +39,12 @@ import com.fasterxml.uuid.NoArgGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.squirrelframework.foundation.fsm.AnonymousAction;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -96,6 +104,29 @@ public abstract class FlowProcessingAction<T extends FlowProcessingFsm<T, S, E, 
 
     protected Set<String> findFlowsIdsByEndpointWithMultiTable(SwitchId switchId, int port) {
         return new HashSet<>(flowRepository.findFlowsIdsByEndpointWithMultiTableSupport(switchId, port));
+    }
+
+    protected List<Flow> findOuterVlanMatchSharedRuleUsage(FlowEndpoint needle) {
+        if (! FlowEndpoint.isVlanIdSet(needle.getOuterVlanId())) {
+            return Collections.emptyList();
+        }
+
+        List<Flow> results = new ArrayList<>();
+        for (Flow entry : flowRepository.findByEndpoint(needle.getSwitchId(), needle.getPortNumber())) {
+            for (FlowSideAdapter flowSide : new FlowSideAdapter[] {
+                    new FlowSourceAdapter(entry),
+                    new FlowDestAdapter(entry)}) {
+                FlowEndpoint endpoint = flowSide.getEndpoint();
+                if (needle.isSwitchPortEquals(endpoint)) {
+                    if (needle.getOuterVlanId() == endpoint.getOuterVlanId()) {
+                        results.add(entry);
+                    }
+                    break;
+                }
+            }
+        }
+
+        return results;
     }
 
     protected Set<String> getDiverseWithFlowIds(Flow flow) {

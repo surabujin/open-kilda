@@ -135,7 +135,8 @@ public class SpeakerFlowSegmentRequestBuilder implements FlowCommandBuilder {
         return new RulesContext(
                 pathContext.isRemoveCustomerPortRule(),
                 pathContext.isRemoveCustomerPortLldpRule(),
-                pathContext.isRemoveCustomerPortArpRule());
+                pathContext.isRemoveCustomerPortArpRule(),
+                pathContext.isRemoveOuterVlanMatchSharedRule());
     }
 
     @SuppressWarnings("squid:S00107")

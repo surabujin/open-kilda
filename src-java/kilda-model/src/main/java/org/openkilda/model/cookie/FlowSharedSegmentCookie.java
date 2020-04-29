@@ -1,0 +1,87 @@
+/*
+ * Copyright 2020 Telstra Open Source
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
+package org.openkilda.model.cookie;
+
+import org.openkilda.model.bitops.BitField;
+import org.openkilda.model.bitops.NumericEnumField;
+
+import lombok.Builder;
+import lombok.Getter;
+import org.apache.commons.lang3.ArrayUtils;
+
+public class FlowSharedSegmentCookie extends CookieBase {
+    // update ALL_FIELDS if modify fields list
+    //                           used by generic cookie -> 0x9FF0_0000_0000_0000L
+    static final BitField SHARED_TYPE_FIELD = new BitField(0x000F_0000_0000_0000L);
+    static final BitField UNIQUE_ID_FIELD   = new BitField(0x0000_0000_FFFF_FFFFL);
+
+    // used by unit tests to check fields intersections
+    static final BitField[] ALL_FIELDS = ArrayUtils.addAll(CookieBase.ALL_FIELDS, SHARED_TYPE_FIELD, UNIQUE_ID_FIELD);
+
+    private static final CookieType VALID_TYPE = CookieType.SHARED_OF_FLOW;
+
+    @Builder
+    protected FlowSharedSegmentCookie(CookieType type, SharedSegmentType segmentType, int uniqueId) {
+        super(makeValue(type, segmentType, uniqueId), type);
+    }
+
+    public FlowSharedSegmentCookieBuilder toBuilder() {
+        return new FlowSharedSegmentCookieBuilder()
+                .type(getType())
+                .segmentType(getSegmentType())
+                .uniqueId(getUniqueId());
+    }
+
+    public SharedSegmentType getSegmentType() {
+        int numericValue = (int) getField(SHARED_TYPE_FIELD);
+        return resolveEnum(SharedSegmentType.values(), numericValue).orElse(SharedSegmentType.INVALID);
+    }
+
+    public int getUniqueId() {
+        return (int) getField(UNIQUE_ID_FIELD);
+    }
+
+    public static FlowSharedSegmentCookieBuilder builder(SharedSegmentType segmentType) {
+        return new FlowSharedSegmentCookieBuilder()
+                .type(VALID_TYPE)
+                .segmentType(segmentType);
+    }
+
+    private static long makeValue(CookieType type, SharedSegmentType segmentType, int uniqueId) {
+        if (type != VALID_TYPE) {
+            throw new IllegalArgumentException(formatIllegalTypeError(type, VALID_TYPE));
+        }
+
+        long value = setField(0, SHARED_TYPE_FIELD, segmentType.getValue());
+        return setField(value, UNIQUE_ID_FIELD, uniqueId);
+    }
+
+    public enum SharedSegmentType implements NumericEnumField {
+        QINQ_OUTER_VLAN(0),
+
+        // This do not consume any value from allowed address space - you can define another field with -1 value.
+        // (must be last entry)
+        INVALID(-1);
+
+        @Getter
+        private final int value;
+
+        SharedSegmentType(int value) {
+            this.value = value;
+        }
+    }
+}

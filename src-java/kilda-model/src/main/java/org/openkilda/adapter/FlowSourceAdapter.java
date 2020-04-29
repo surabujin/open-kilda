@@ -20,7 +20,7 @@ import org.openkilda.model.Flow;
 import org.openkilda.model.FlowEndpoint;
 
 public class FlowSourceAdapter extends FlowSideAdapter {
-    protected FlowSourceAdapter(Flow flow) {
+    public FlowSourceAdapter(Flow flow) {
         super(flow);
     }
 

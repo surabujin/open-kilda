@@ -17,8 +17,11 @@ package org.openkilda.wfm.topology.flowhs.fsm.common.actions;
 
 import static java.lang.String.format;
 
+import org.openkilda.adapter.FlowSideAdapter;
+import org.openkilda.adapter.FlowSourceAdapter;
 import org.openkilda.messaging.error.ErrorType;
 import org.openkilda.model.Flow;
+import org.openkilda.model.FlowEndpoint;
 import org.openkilda.model.SwitchId;
 import org.openkilda.model.SwitchProperties;
 import org.openkilda.persistence.PersistenceManager;
@@ -34,6 +37,7 @@ import org.openkilda.wfm.topology.flowhs.service.FlowCommandBuilderFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -103,6 +107,7 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
         boolean srcPortChanged = oldFlow.getSrcPort() != newFlow.getSrcPort();
 
         return srcPortChanged
+
                 && findFlowsIdsByEndpointWithMultiTable(oldFlow.getSrcSwitch(), oldFlow.getSrcPort()).isEmpty();
     }
 
@@ -145,18 +150,40 @@ public abstract class BaseFlowRuleRemovalAction<T extends FlowProcessingFsm<T, S
                 oldFlow.getFlowId(), oldFlow.getDestSwitch(), oldFlow.getDestPort());
     }
 
+    protected boolean removeOuterVlanMatchSharedRule(String flowId, FlowEndpoint current, FlowEndpoint goal) {
+        if (Objects.equals(current.getSwitchId(), goal.getSwitchId())
+                && Objects.equals(current.getPortNumber(), goal.getPortNumber())) {
+            return false;
+        }
+        return findOuterVlanMatchSharedRuleUsage(current).stream()
+                .allMatch(entry -> flowId.equals(entry.getFlowId()));
+    }
+
     protected SpeakerRequestBuildContext buildSpeakerContextForRemoval(RequestedFlow oldFlow, RequestedFlow newFlow) {
+        FlowEndpoint oldIngress = new FlowEndpoint(
+                oldFlow.getSrcSwitch(), oldFlow.getSrcPort(), oldFlow.getSrcVlan(), oldFlow.getSrcInnerVlan());
+        FlowEndpoint oldEgress = new FlowEndpoint(
+                oldFlow.getDestSwitch(), oldFlow.getDestPort(), oldFlow.getDestVlan(), oldFlow.getDestInnerVlan());
+
+        FlowEndpoint newIngress = new FlowEndpoint(
+                newFlow.getSrcSwitch(), newFlow.getSrcPort(), newFlow.getSrcVlan(), newFlow.getSrcInnerVlan());
+        FlowEndpoint newEgress = new FlowEndpoint(
+                newFlow.getDestSwitch(), newFlow.getDestPort(), newFlow.getDestVlan(), newFlow.getDestInnerVlan());
 
         PathContext forwardPathContext = PathContext.builder()
                 .removeCustomerPortRule(removeForwardCustomerPortSharedCatchRule(oldFlow, newFlow))
                 .removeCustomerPortLldpRule(removeForwardSharedLldpRule(oldFlow, newFlow))
                 .removeCustomerPortArpRule(removeForwardSharedArpRule(oldFlow, newFlow))
+                .removeOuterVlanMatchSharedRule(
+                        removeOuterVlanMatchSharedRule(oldFlow.getFlowId(), oldIngress, newIngress))
                 .build();
 
         PathContext reversePathContext = PathContext.builder()
                 .removeCustomerPortRule(removeReverseCustomerPortSharedCatchRule(oldFlow, newFlow))
                 .removeCustomerPortLldpRule(removeReverseSharedLldpRule(oldFlow, newFlow))
                 .removeCustomerPortArpRule(removeReverseSharedArpRule(oldFlow, newFlow))
+                .removeOuterVlanMatchSharedRule(
+                        removeOuterVlanMatchSharedRule(oldFlow.getFlowId(), oldEgress, newEgress))
                 .build();
 
         return SpeakerRequestBuildContext.builder()

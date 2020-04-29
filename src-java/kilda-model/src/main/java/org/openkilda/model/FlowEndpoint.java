@@ -115,4 +115,9 @@ public class FlowEndpoint extends NetworkEndpoint {
         }
         return view;
     }
+
+    public boolean isSwitchPortEquals(FlowEndpoint other) {
+        return switchId.equals(other.switchId)
+                && portNumber.equals(other.portNumber);
+    }
 }
