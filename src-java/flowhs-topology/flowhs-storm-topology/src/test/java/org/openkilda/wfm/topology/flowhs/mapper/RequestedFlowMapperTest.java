@@ -22,6 +22,7 @@ import org.openkilda.messaging.command.flow.FlowRequest;
 import org.openkilda.messaging.model.DetectConnectedDevicesDto;
 import org.openkilda.model.Flow;
 import org.openkilda.model.FlowEncapsulationType;
+import org.openkilda.model.FlowEndpoint;
 import org.openkilda.model.Switch;
 import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.topology.flowhs.model.DetectConnectedDevices;
@@ -45,14 +46,12 @@ public class RequestedFlowMapperTest {
     public static final Long MAX_LATENCY = 200L;
     public static final FlowEncapsulationType ENCAPSULATION_TYPE = FlowEncapsulationType.TRANSIT_VLAN;
 
+    private static FlowEndpoint sourceEndpoint = new FlowEndpoint(SRC_SWITCH_ID, SRC_PORT, SRC_VLAN);
+    private static FlowEndpoint desctinationEndpoint = new FlowEndpoint(DST_SWITCH_ID, DST_PORT, DST_VLAN);
     private FlowRequest flowRequest = FlowRequest.builder()
             .flowId(FLOW_ID)
-            .sourceSwitch(SRC_SWITCH_ID)
-            .sourcePort(SRC_PORT)
-            .sourceVlan(SRC_VLAN)
-            .destinationSwitch(DST_SWITCH_ID)
-            .destinationPort(DST_PORT)
-            .destinationVlan(DST_VLAN)
+            .source(sourceEndpoint)
+            .destination(desctinationEndpoint)
             .priority(PRIORITY)
             .diverseFlowId(DIVERSE_FLOW_ID)
             .description(DESCRIPTION)
