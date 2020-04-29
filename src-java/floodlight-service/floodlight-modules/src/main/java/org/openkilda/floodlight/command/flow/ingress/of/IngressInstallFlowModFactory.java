@@ -19,11 +19,12 @@ import org.openkilda.floodlight.command.flow.ingress.IngressFlowSegmentBase;
 import org.openkilda.floodlight.switchmanager.SwitchManager;
 import org.openkilda.floodlight.utils.OfAdapter;
 import org.openkilda.floodlight.utils.OfFlowModBuilderFactory;
+import org.openkilda.floodlight.utils.metadata.RoutingMetadata;
 import org.openkilda.model.MeterId;
 import org.openkilda.model.SwitchFeature;
 
+import com.google.common.collect.ImmutableList;
 import net.floodlightcontroller.core.IOFSwitch;
-import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -40,7 +41,7 @@ public abstract class IngressInstallFlowModFactory extends IngressFlowModFactory
         super(flowModBuilderFactory, command, sw, features);
     }
 
-    protected List<OFInstruction> makeForwardMessageInstructions(OFFactory of, MeterId effectiveMeterId) {
+    protected List<OFInstruction> makeForwardMessageInstructions(MeterId effectiveMeterId, List<Integer> vlanStack) {
         List<OFAction> applyActions = new ArrayList<>();
         List<OFInstruction> instructions = new ArrayList<>();
 
@@ -48,7 +49,7 @@ public abstract class IngressInstallFlowModFactory extends IngressFlowModFactory
             OfAdapter.INSTANCE.makeMeterCall(of, effectiveMeterId, applyActions, instructions);
         }
 
-        applyActions.addAll(makeTransformActions());
+        applyActions.addAll(makeTransformActions(vlanStack));
         applyActions.add(makeOutputAction());
 
         instructions.add(of.instructions().applyActions(applyActions));
@@ -60,7 +61,18 @@ public abstract class IngressInstallFlowModFactory extends IngressFlowModFactory
         return instructions;
     }
 
-    protected abstract List<OFAction> makeTransformActions();
+    @Override
+    protected List<OFInstruction> makeOuterVlanMatchInstructions() {
+        RoutingMetadata metadata = RoutingMetadata.builder()
+                .outerVlanId(command.getEndpoint().getOuterVlanId())
+                .build(switchFeatures);
+        return ImmutableList.of(
+                of.instructions().applyActions(ImmutableList.of(of.actions().popVlan())),
+                of.instructions().writeMetadata(metadata.getValue(), metadata.getMask()),
+                of.instructions().gotoTable(TableId.of(SwitchManager.INGRESS_TABLE_ID)));
+    }
+
+    protected abstract List<OFAction> makeTransformActions(List<Integer> vlanStack);
 
     protected abstract List<OFInstruction> makeMetadataInstructions();
 

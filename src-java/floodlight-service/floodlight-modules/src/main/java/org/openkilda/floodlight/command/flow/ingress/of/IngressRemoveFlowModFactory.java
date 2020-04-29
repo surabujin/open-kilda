@@ -21,7 +21,6 @@ import org.openkilda.model.MeterId;
 import org.openkilda.model.SwitchFeature;
 
 import net.floodlightcontroller.core.IOFSwitch;
-import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 
 import java.util.Collections;
@@ -36,7 +35,12 @@ public abstract class IngressRemoveFlowModFactory extends IngressFlowModFactory 
     }
 
     @Override
-    protected List<OFInstruction> makeForwardMessageInstructions(OFFactory of, MeterId effectiveMeterId) {
+    protected List<OFInstruction> makeForwardMessageInstructions(MeterId effectiveMeterId, List<Integer> vlanStack) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    protected List<OFInstruction> makeOuterVlanMatchInstructions() {
         return Collections.emptyList();
     }
 }

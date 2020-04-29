@@ -16,6 +16,7 @@
 package org.openkilda.model;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -78,6 +79,16 @@ public class FlowEndpoint extends NetworkEndpoint {
             this.outerVlanId = 0;
             this.innerVlanId = 0;
         }
+    }
+
+    @JsonIgnore
+    public List<Integer> getVlanStack() {
+        return makeVlanStack(innerVlanId, outerVlanId);
+    }
+
+    public boolean detectConflict(FlowEndpoint other) {
+        // At this moment conflict is "full" endpoint match - including all vlans
+        return equals(other);
     }
 
     /**

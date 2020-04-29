@@ -44,20 +44,8 @@ abstract class OneSwitchFlowInstallFlowModFactory extends IngressInstallFlowModF
     }
 
     @Override
-    protected List<OFAction> makeTransformActions() {
-        List<Integer> currentVlanStack = new ArrayList<>();
-        FlowEndpoint endpoint = command.getEndpoint();
-        if (FlowEndpoint.isVlanIdSet(endpoint.getOuterVlanId())) {
-            currentVlanStack.add(endpoint.getOuterVlanId());
-        }
-
-        List<Integer> desiredVlanStack = new ArrayList<>();
-        FlowEndpoint egressEndpoint = command.getEgressEndpoint();
-        if (FlowEndpoint.isVlanIdSet(egressEndpoint.getOuterVlanId())) {
-            desiredVlanStack.add(egressEndpoint.getOuterVlanId());
-        }
-
-        return OfAdapter.INSTANCE.makeVlanReplaceActions(of, currentVlanStack, desiredVlanStack);
+    protected List<OFAction> makeTransformActions(List<Integer> vlanStack) {
+        return OfAdapter.INSTANCE.makeVlanReplaceActions(of, vlanStack, command.getEgressEndpoint().getVlanStack());
     }
 
     @Override
