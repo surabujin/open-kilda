@@ -19,6 +19,7 @@ package org.openkilda.model.cookie;
 import org.openkilda.model.bitops.BitField;
 import org.openkilda.model.bitops.NumericEnumField;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.Builder;
 import lombok.Getter;
 import org.apache.commons.lang3.ArrayUtils;
@@ -27,23 +28,32 @@ public class FlowSharedSegmentCookie extends CookieBase {
     // update ALL_FIELDS if modify fields list
     //                           used by generic cookie -> 0x9FF0_0000_0000_0000L
     static final BitField SHARED_TYPE_FIELD = new BitField(0x000F_0000_0000_0000L);
-    static final BitField UNIQUE_ID_FIELD   = new BitField(0x0000_0000_FFFF_FFFFL);
+    static final BitField PORT_NUMBER_FIELD = new BitField(0x0000_0000_0000_FFFFL);
+    static final BitField VLAN_ID_FIELD     = new BitField(0x0000_0000_0FFF_0000L);
 
     // used by unit tests to check fields intersections
-    static final BitField[] ALL_FIELDS = ArrayUtils.addAll(CookieBase.ALL_FIELDS, SHARED_TYPE_FIELD, UNIQUE_ID_FIELD);
+    static final BitField[] ALL_FIELDS = ArrayUtils.addAll(
+            CookieBase.ALL_FIELDS,
+            SHARED_TYPE_FIELD, PORT_NUMBER_FIELD, VLAN_ID_FIELD);
 
     private static final CookieType VALID_TYPE = CookieType.SHARED_OF_FLOW;
 
+    @JsonCreator
+    public FlowSharedSegmentCookie(long value) {
+        super(value);
+    }
+
     @Builder
-    protected FlowSharedSegmentCookie(CookieType type, SharedSegmentType segmentType, int uniqueId) {
-        super(makeValue(type, segmentType, uniqueId), type);
+    protected FlowSharedSegmentCookie(CookieType type, SharedSegmentType segmentType, int portNumber, int vlanId) {
+        super(makeValue(type, segmentType, portNumber, vlanId), type);
     }
 
     public FlowSharedSegmentCookieBuilder toBuilder() {
         return new FlowSharedSegmentCookieBuilder()
                 .type(getType())
                 .segmentType(getSegmentType())
-                .uniqueId(getUniqueId());
+                .portNumber(getPortNumber())
+                .vlanId(getVlanId());
     }
 
     public SharedSegmentType getSegmentType() {
@@ -51,8 +61,12 @@ public class FlowSharedSegmentCookie extends CookieBase {
         return resolveEnum(SharedSegmentType.values(), numericValue).orElse(SharedSegmentType.INVALID);
     }
 
-    public int getUniqueId() {
-        return (int) getField(UNIQUE_ID_FIELD);
+    public int getPortNumber() {
+        return (int) getField(PORT_NUMBER_FIELD);
+    }
+
+    public int getVlanId() {
+        return (int) getField(VLAN_ID_FIELD);
     }
 
     public static FlowSharedSegmentCookieBuilder builder(SharedSegmentType segmentType) {
@@ -61,13 +75,14 @@ public class FlowSharedSegmentCookie extends CookieBase {
                 .segmentType(segmentType);
     }
 
-    private static long makeValue(CookieType type, SharedSegmentType segmentType, int uniqueId) {
+    private static long makeValue(CookieType type, SharedSegmentType segmentType, int portNumber, int vlanId) {
         if (type != VALID_TYPE) {
             throw new IllegalArgumentException(formatIllegalTypeError(type, VALID_TYPE));
         }
 
         long value = setField(0, SHARED_TYPE_FIELD, segmentType.getValue());
-        return setField(value, UNIQUE_ID_FIELD, uniqueId);
+        value = setField(value, PORT_NUMBER_FIELD, portNumber);
+        return setField(value, VLAN_ID_FIELD, vlanId);
     }
 
     public enum SharedSegmentType implements NumericEnumField {

@@ -19,9 +19,11 @@ import static java.lang.String.format;
 import static org.openkilda.model.cookie.Cookie.SERVER_42_OUTPUT_VLAN_COOKIE;
 import static org.openkilda.model.cookie.Cookie.SERVER_42_OUTPUT_VXLAN_COOKIE;
 
+import org.openkilda.messaging.command.flow.BaseFlow;
 import org.openkilda.messaging.command.flow.BaseInstallFlow;
 import org.openkilda.messaging.command.flow.InstallServer42Flow;
 import org.openkilda.messaging.command.flow.InstallServer42Flow.InstallServer42FlowBuilder;
+import org.openkilda.messaging.command.flow.InstallSharedFlow;
 import org.openkilda.messaging.command.flow.RemoveFlow;
 import org.openkilda.messaging.command.switches.DeleteRulesCriteria;
 import org.openkilda.messaging.info.rule.FlowApplyActions;
@@ -35,6 +37,8 @@ import org.openkilda.model.PathSegment;
 import org.openkilda.model.SwitchId;
 import org.openkilda.model.SwitchProperties;
 import org.openkilda.model.cookie.Cookie;
+import org.openkilda.model.cookie.CookieBase.CookieType;
+import org.openkilda.model.cookie.FlowSharedSegmentCookie;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.FlowPathRepository;
 import org.openkilda.persistence.repositories.FlowRepository;
@@ -75,9 +79,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     @Override
-    public List<BaseInstallFlow> buildCommandsToSyncMissingRules(SwitchId switchId, List<Long> switchRules) {
+    public List<BaseFlow> buildCommandsToSyncMissingRules(SwitchId switchId, List<Long> switchRules) {
 
-        List<BaseInstallFlow> commands = new ArrayList<>(buildInstallDefaultRuleCommands(switchId, switchRules));
+        List<BaseFlow> commands = new ArrayList<>(buildInstallDefaultRuleCommands(switchId, switchRules));
+        commands.addAll(buildInstallFlowSharedRuleCommands(switchId, switchRules));
 
         flowPathRepository.findBySegmentDestSwitch(switchId)
                 .forEach(flowPath -> {
@@ -188,6 +193,21 @@ public class CommandBuilderImpl implements CommandBuilder {
                 .forEach(commands::add);
 
         return commands;
+    }
+
+    private List<BaseFlow> buildInstallFlowSharedRuleCommands(SwitchId switchId, List<Long> filter) {
+        List<BaseFlow> results = new ArrayList<>();
+        for (long entry : filter) {
+            FlowSharedSegmentCookie cookie = new FlowSharedSegmentCookie(entry);
+            if (cookie.getType() != CookieType.SHARED_OF_FLOW) {
+                continue;
+            }
+
+            results.add(new InstallSharedFlow(
+                    transactionIdGenerator.generate(), "SWMANAGER_SHARED_FLOW_INSTALL", entry, switchId));
+        }
+
+        return results;
     }
 
     @Override

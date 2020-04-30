@@ -17,15 +17,20 @@ package org.openkilda.wfm.topology.switchmanager.service.impl;
 
 import static java.util.stream.Collectors.toList;
 
+import org.openkilda.adapter.FlowSideAdapter;
 import org.openkilda.messaging.info.meter.MeterEntry;
 import org.openkilda.messaging.info.rule.FlowEntry;
 import org.openkilda.messaging.info.switches.MeterInfoEntry;
 import org.openkilda.messaging.info.switches.MeterMisconfiguredInfoEntry;
+import org.openkilda.model.Flow;
+import org.openkilda.model.FlowEndpoint;
 import org.openkilda.model.FlowPath;
 import org.openkilda.model.Meter;
 import org.openkilda.model.Switch;
 import org.openkilda.model.SwitchId;
 import org.openkilda.model.cookie.Cookie;
+import org.openkilda.model.cookie.FlowSharedSegmentCookie;
+import org.openkilda.model.cookie.FlowSharedSegmentCookie.SharedSegmentType;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.FlowPathRepository;
 import org.openkilda.persistence.repositories.SwitchRepository;
@@ -39,6 +44,7 @@ import org.openkilda.wfm.topology.switchmanager.service.ValidationService;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
@@ -69,22 +75,8 @@ public class ValidationServiceImpl implements ValidationService {
                                              List<FlowEntry> expectedDefaultRules) {
         log.debug("Validating rules on switch {}", switchId);
 
-        Set<Long> expectedCookies = flowPathRepository.findBySegmentDestSwitch(switchId).stream()
-                .filter(flowPath -> flowPath.getFlow().isActualPathId(flowPath.getPathId()))
-                .map(FlowPath::getCookie)
-                .map(Cookie::getValue)
-                .collect(Collectors.toSet());
-
-        Collection<FlowPath> paths = flowPathRepository.findByEndpointSwitch(switchId);
-
-        paths.stream()
-                .filter(flowPath -> flowPath.getFlow().isActualPathId(flowPath.getPathId()))
-                .map(FlowPath::getCookie)
-                .map(Cookie::getValue)
-                .forEach(expectedCookies::add);
-
-        return makeRulesResponse(
-                expectedCookies, presentRules, expectedDefaultRules, switchId);
+        Set<Long> expectedCookies = getExpectedFlowRules(switchId);
+        return makeRulesResponse(expectedCookies, presentRules, expectedDefaultRules, switchId);
     }
 
     private ValidateRulesResult makeRulesResponse(Set<Long> expectedCookies, List<FlowEntry> presentRules,
@@ -189,6 +181,41 @@ public class ValidationServiceImpl implements ValidationService {
         }
 
         return comparePresentedAndExpectedMeters(isESwitch, presentMeters, expectedMeters);
+    }
+
+    private Set<Long> getExpectedFlowRules(SwitchId switchId) {
+        Set<Long> result = new HashSet<>();
+
+        // collect transit segments
+        flowPathRepository.findBySegmentDestSwitch(switchId).stream()
+                .filter(flowPath -> flowPath.getFlow().isActualPathId(flowPath.getPathId()))
+                .map(FlowPath::getCookie)
+                .map(Cookie::getValue)
+                .forEach(result::add);
+
+        // collect termination segments
+        for (FlowPath path : flowPathRepository.findByEndpointSwitch(switchId)) {
+            Flow flow = path.getFlow();
+            if (! flow.isActualPathId(path.getPathId())) {
+                continue;
+            }
+
+            result.add(path.getCookie().getValue());
+
+            // shared outer vlan match rule
+            FlowSideAdapter ingress = FlowSideAdapter.makeIngressAdapter(flow, path);
+            FlowEndpoint endpoint = ingress.getEndpoint();
+            if (switchId.equals(endpoint.getSwitchId())
+                    && FlowEndpoint.isVlanIdSet(endpoint.getOuterVlanId())
+                    && ingress.isPrimaryEgressPath(path.getPathId())) {
+                result.add(FlowSharedSegmentCookie.builder(SharedSegmentType.QINQ_OUTER_VLAN)
+                        .portNumber(endpoint.getPortNumber())
+                        .vlanId(endpoint.getOuterVlanId())
+                        .build().getValue());
+            }
+        }
+
+        return result;
     }
 
     private ValidateMetersResult comparePresentedAndExpectedMeters(

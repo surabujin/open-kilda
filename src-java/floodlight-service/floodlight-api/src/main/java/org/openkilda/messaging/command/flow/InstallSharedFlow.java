@@ -1,4 +1,4 @@
-/* Copyright 2019 Telstra Open Source
+/* Copyright 2020 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -15,31 +15,22 @@
 
 package org.openkilda.messaging.command.flow;
 
-import org.openkilda.messaging.command.CommandData;
+import static org.openkilda.messaging.Utils.FLOW_ID;
+import static org.openkilda.messaging.Utils.TRANSACTION_ID;
+
 import org.openkilda.model.SwitchId;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Value;
 
-@Value
-@Builder
-@EqualsAndHashCode(callSuper = false)
-public class InstallFlowForSwitchManagerRequest extends CommandData {
+import java.util.UUID;
 
-    @JsonProperty("flow_command")
-    private BaseFlow flowCommand;
-
+public class InstallSharedFlow extends BaseFlow {
     @JsonCreator
-    public InstallFlowForSwitchManagerRequest(@JsonProperty("flow_command") BaseFlow flowCommand) {
-        this.flowCommand = flowCommand;
-    }
-
-    @JsonIgnore
-    public SwitchId getSwitchId() {
-        return flowCommand.getSwitchId();
+    public InstallSharedFlow(@JsonProperty(TRANSACTION_ID) UUID transactionId,
+                             @JsonProperty(FLOW_ID) String id,
+                             @JsonProperty("cookie") Long cookie,
+                             @JsonProperty("switch_id") SwitchId switchId) {
+        super(transactionId, id, cookie, switchId);
     }
 }

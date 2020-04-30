@@ -81,13 +81,14 @@ import org.openkilda.messaging.command.discovery.DiscoverIslCommandData;
 import org.openkilda.messaging.command.discovery.DiscoverPathCommandData;
 import org.openkilda.messaging.command.discovery.NetworkCommandData;
 import org.openkilda.messaging.command.discovery.PortsCommandData;
-import org.openkilda.messaging.command.flow.BaseInstallFlow;
+import org.openkilda.messaging.command.flow.BaseFlow;
 import org.openkilda.messaging.command.flow.DeleteMeterRequest;
 import org.openkilda.messaging.command.flow.InstallEgressFlow;
 import org.openkilda.messaging.command.flow.InstallFlowForSwitchManagerRequest;
 import org.openkilda.messaging.command.flow.InstallIngressFlow;
 import org.openkilda.messaging.command.flow.InstallOneSwitchFlow;
 import org.openkilda.messaging.command.flow.InstallServer42Flow;
+import org.openkilda.messaging.command.flow.InstallSharedFlow;
 import org.openkilda.messaging.command.flow.InstallTransitFlow;
 import org.openkilda.messaging.command.flow.MeterModifyCommandRequest;
 import org.openkilda.messaging.command.flow.ReinstallDefaultFlowForSwitchManagerRequest;
@@ -146,6 +147,8 @@ import org.openkilda.model.PortStatus;
 import org.openkilda.model.SwitchId;
 import org.openkilda.model.cookie.Cookie;
 import org.openkilda.model.cookie.CookieBase.CookieType;
+import org.openkilda.model.cookie.FlowSharedSegmentCookie;
+import org.openkilda.model.cookie.FlowSharedSegmentCookie.SharedSegmentType;
 import org.openkilda.model.cookie.PortColourCookie;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -552,7 +555,18 @@ class RecordHandler implements Runnable {
                 directOutputVlanType,
                 meterId,
                 command.isMultiTable());
+    }
 
+    private void installSharedFlow(InstallSharedFlow command) throws SwitchOperationException, FlowCommandException {
+        FlowSharedSegmentCookie cookie = new FlowSharedSegmentCookie(command.getCookie());
+        SharedSegmentType segmentType = cookie.getSegmentType();
+        if (segmentType == SharedSegmentType.QINQ_OUTER_VLAN) {
+            context.getSwitchManager().installOuterVlanMatchSharedFlow(command.getSwitchId(), command.getId(), cookie);
+        } else {
+            throw new FlowCommandException(
+                    command.getId(), command.getCookie(), command.getTransactionId(), ErrorType.REQUEST_INVALID,
+                    format("Unsupported shared segment type %s (cookie: %s)", segmentType, cookie));
+        }
     }
 
     /**
@@ -1405,7 +1419,7 @@ class RecordHandler implements Runnable {
         getKafkaProducer().sendMessageAndTrack(replyToTopic, message.getCorrelationId(), response);
     }
 
-    private void installFlow(BaseInstallFlow command) throws FlowCommandException,
+    private void installFlow(BaseFlow command) throws FlowCommandException,
             SwitchOperationException {
         logger.debug("Processing flow install command {}", command);
         if (command instanceof InstallServer42Flow) {
@@ -1420,6 +1434,8 @@ class RecordHandler implements Runnable {
             installTransitFlow((InstallTransitFlow) command);
         } else if (command instanceof InstallOneSwitchFlow) {
             installOneSwitchFlow((InstallOneSwitchFlow) command);
+        } else if (command instanceof InstallSharedFlow) {
+            installSharedFlow((InstallSharedFlow) command);
         } else {
             throw new FlowCommandException(command.getId(), command.getCookie(), command.getTransactionId(),
                     ErrorType.REQUEST_INVALID, "Unsupported command for install.");

@@ -139,10 +139,11 @@ public abstract class IngressFlowModFactory {
     }
 
     public OFFlowMod makeOuterVlanMatchSharedMessage() {
-        FlowSharedSegmentCookie cookie = FlowSharedSegmentCookie.builder(SharedSegmentType.QINQ_OUTER_VLAN)
-                .uniqueId(makeOuterVlanSharedCookieId())
-                .build();
         FlowEndpoint endpoint = command.getEndpoint();
+        FlowSharedSegmentCookie cookie = FlowSharedSegmentCookie.builder(SharedSegmentType.QINQ_OUTER_VLAN)
+                .portNumber(endpoint.getPortNumber())
+                .vlanId(endpoint.getOuterVlanId())
+                .build();
         return flowModBuilderFactory.makeBuilder(of, TableId.of(SwitchManager.PRE_INGRESS_TABLE_ID))
                 .setCookie(U64.of(cookie.getValue()))
                 .setMatch(of.buildMatch()
@@ -238,24 +239,4 @@ public abstract class IngressFlowModFactory {
             MeterId effectiveMeterId, List<Integer> vlanStack);
 
     protected abstract List<OFInstruction> makeOuterVlanMatchInstructions();
-
-    // TODO(surabujin) - move to stage where it is safe to fail on such verification
-    private int makeOuterVlanSharedCookieId() {
-        FlowEndpoint endpoint = command.getEndpoint();
-        int vlanId = endpoint.getOuterVlanId();
-        int vlanUpperRange = 0xFFF;
-        if ((vlanId & vlanUpperRange) != vlanId) {
-            throw new IllegalArgumentException(String.format(
-                    "VLAN-id %d is not within allowed range from 0 to %d", vlanId, vlanUpperRange));
-        }
-
-        int portNumber = endpoint.getPortNumber();
-        int portUpperRange = 0xFFFF;
-        if ((portNumber & portUpperRange) != portNumber) {
-            throw new IllegalArgumentException(String.format(
-                    "Port number %d is not within allowed range from 0 to %d", portNumber, portUpperRange));
-        }
-
-        return (vlanId << 16) | portNumber;
-    }
 }

@@ -15,6 +15,7 @@
 
 package org.openkilda.floodlight.switchmanager;
 
+import org.openkilda.floodlight.error.OfInstallException;
 import org.openkilda.floodlight.error.SwitchNotFoundException;
 import org.openkilda.floodlight.error.SwitchOperationException;
 import org.openkilda.messaging.command.flow.RuleType;
@@ -24,6 +25,8 @@ import org.openkilda.messaging.info.meter.MeterEntry;
 import org.openkilda.model.FlowEncapsulationType;
 import org.openkilda.model.MacAddress;
 import org.openkilda.model.OutputVlanType;
+import org.openkilda.model.SwitchId;
+import org.openkilda.model.cookie.FlowSharedSegmentCookie;
 
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.module.IFloodlightService;
@@ -524,6 +527,9 @@ public interface ISwitchManager extends IFloodlightService {
                                                       final int inputPort, final int outputPort, int inputVlanId,
                                                       int outputVlanId, final OutputVlanType outputVlanType,
                                                       final long meterId, boolean multiTable)
+            throws SwitchOperationException;
+
+    void installOuterVlanMatchSharedFlow(SwitchId switchId, String flowId, FlowSharedSegmentCookie cookie)
             throws SwitchOperationException;
 
     /**
