@@ -23,6 +23,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Value;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -86,11 +87,6 @@ public class FlowEndpoint extends NetworkEndpoint {
         return makeVlanStack(innerVlanId, outerVlanId);
     }
 
-    public boolean detectConflict(FlowEndpoint other) {
-        // At this moment conflict is "full" endpoint match - including all vlans
-        return equals(other);
-    }
-
     /**
      * Scan provided sequence for valid VLAN IDs and return them as a list.
      */
@@ -119,5 +115,10 @@ public class FlowEndpoint extends NetworkEndpoint {
     public boolean isSwitchPortEquals(FlowEndpoint other) {
         return switchId.equals(other.switchId)
                 && portNumber.equals(other.portNumber);
+    }
+
+    public boolean isSwitchPortVlanEquals(FlowEndpoint other) {
+        return isSwitchPortEquals(other)
+                && Objects.equals(getVlanStack(), other.getVlanStack());
     }
 }

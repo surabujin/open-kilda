@@ -94,6 +94,14 @@ public abstract class RequestedFlowMapper {
 
     public abstract FlowEncapsulationType map(org.openkilda.messaging.payload.flow.FlowEncapsulationType source);
 
+    public FlowEndpoint mapSource(RequestedFlow flow) {
+        return new FlowEndpoint(flow.getSrcSwitch(), flow.getSrcPort(), flow.getSrcVlan(), flow.getSrcInnerVlan());
+    }
+
+    public FlowEndpoint mapDest(RequestedFlow flow) {
+        return new FlowEndpoint(flow.getDestSwitch(), flow.getDestPort(), flow.getDestVlan(), flow.getDestInnerVlan());
+    }
+
     /**
      * Decode string representation of {@code PathComputationStrategy}.
      */
