@@ -29,7 +29,6 @@ import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstructionWriteMetadata;
 import org.projectfloodlight.openflow.types.OFPort;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 

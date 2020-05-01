@@ -44,7 +44,6 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
-import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 

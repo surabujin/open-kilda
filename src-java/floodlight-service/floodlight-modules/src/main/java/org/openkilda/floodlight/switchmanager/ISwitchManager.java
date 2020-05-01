@@ -15,7 +15,6 @@
 
 package org.openkilda.floodlight.switchmanager;
 
-import org.openkilda.floodlight.error.OfInstallException;
 import org.openkilda.floodlight.error.SwitchNotFoundException;
 import org.openkilda.floodlight.error.SwitchOperationException;
 import org.openkilda.messaging.command.flow.RuleType;

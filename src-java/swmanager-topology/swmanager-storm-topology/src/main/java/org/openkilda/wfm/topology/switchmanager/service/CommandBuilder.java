@@ -16,7 +16,6 @@
 package org.openkilda.wfm.topology.switchmanager.service;
 
 import org.openkilda.messaging.command.flow.BaseFlow;
-import org.openkilda.messaging.command.flow.BaseInstallFlow;
 import org.openkilda.messaging.command.flow.RemoveFlow;
 import org.openkilda.messaging.info.rule.FlowEntry;
 import org.openkilda.model.SwitchId;

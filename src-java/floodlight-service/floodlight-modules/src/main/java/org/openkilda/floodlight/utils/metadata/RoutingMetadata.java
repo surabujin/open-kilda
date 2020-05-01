@@ -95,11 +95,11 @@ public class RoutingMetadata extends MetadataBase {
         }
 
         private RoutingMetadata buildTruncatedTo32Bits() {
-            return new RoutingMetadata32(lldpFlag, arpFlag, oneSwitchFlowFlag);
+            return new RoutingMetadata32(lldpFlag, arpFlag, oneSwitchFlowFlag, outerVlanId);
         }
 
         private RoutingMetadata buildGeneric() {
-            return new RoutingMetadata(lldpFlag, arpFlag, oneSwitchFlowFlag);
+            return new RoutingMetadata(lldpFlag, arpFlag, oneSwitchFlowFlag, outerVlanId);
         }
     }
 }

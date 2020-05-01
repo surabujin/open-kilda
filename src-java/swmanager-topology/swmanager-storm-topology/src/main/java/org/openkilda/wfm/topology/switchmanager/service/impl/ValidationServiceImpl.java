@@ -44,7 +44,6 @@ import org.openkilda.wfm.topology.switchmanager.service.ValidationService;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;

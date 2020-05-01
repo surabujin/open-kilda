@@ -17,8 +17,6 @@ package org.openkilda.wfm.topology.flowhs.fsm.common.actions;
 
 import static java.lang.String.format;
 
-import org.openkilda.adapter.FlowSideAdapter;
-import org.openkilda.adapter.FlowSourceAdapter;
 import org.openkilda.messaging.error.ErrorType;
 import org.openkilda.model.Flow;
 import org.openkilda.model.FlowEndpoint;

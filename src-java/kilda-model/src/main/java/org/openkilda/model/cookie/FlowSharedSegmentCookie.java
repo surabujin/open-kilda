@@ -1,5 +1,4 @@
-/*
- * Copyright 2020 Telstra Open Source
+/* Copyright 2020 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -48,6 +47,9 @@ public class FlowSharedSegmentCookie extends CookieBase {
         super(makeValue(type, segmentType, portNumber, vlanId), type);
     }
 
+    /**
+     * Convert existing object into builder.
+     */
     public FlowSharedSegmentCookieBuilder toBuilder() {
         return new FlowSharedSegmentCookieBuilder()
                 .type(getType())
@@ -69,6 +71,9 @@ public class FlowSharedSegmentCookie extends CookieBase {
         return (int) getField(VLAN_ID_FIELD);
     }
 
+    /**
+     * Make builder.
+     */
     public static FlowSharedSegmentCookieBuilder builder(SharedSegmentType segmentType) {
         return new FlowSharedSegmentCookieBuilder()
                 .type(VALID_TYPE)

@@ -32,7 +32,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.NonNull;
 import net.floodlightcontroller.core.IOFSwitch;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
@@ -138,6 +137,10 @@ public abstract class IngressFlowModFactory {
         return makeForwardMessage(builder, effectiveMeterId, Collections.emptyList());
     }
 
+    /**
+     * Make rule to match traffic by port and vlan, write vlan into metadata and pass packet into "next" table. This
+     * rule is shared across all flow with equal port and vlan(outer).
+     */
     public OFFlowMod makeOuterVlanMatchSharedMessage() {
         FlowEndpoint endpoint = command.getEndpoint();
         FlowSharedSegmentCookie cookie = FlowSharedSegmentCookie.builder(SharedSegmentType.QINQ_OUTER_VLAN)
