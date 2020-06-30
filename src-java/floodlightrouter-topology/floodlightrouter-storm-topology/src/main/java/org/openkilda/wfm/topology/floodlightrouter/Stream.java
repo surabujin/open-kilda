@@ -17,6 +17,7 @@ package org.openkilda.wfm.topology.floodlightrouter;
 
 public final class Stream {
 
+    // TODO: del?
     /**
      * Returns formatted param with respect to region.
      * @param param - stream or topic
