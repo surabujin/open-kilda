@@ -115,7 +115,8 @@ public class StatisticsService implements IStatisticsService, IFloodlightModule 
      * execute stats requests handling.
      * @param context module context
      */
-    public void processStatistics(FloodlightModuleContext context, Set<DatapathId> excludeSwitches) {
+    public void processStatistics(
+            FloodlightModuleContext context, Set<DatapathId> excludeSwitches, Set<DatapathId> scope) {
         Map<String, String> configParams = context.getConfigParams(DefaultSwitchRoleService.class);
         String defaultRole = configParams.get("defaultRole");
         if ("ROLE_SLAVE".equals(defaultRole)) {
@@ -127,9 +128,9 @@ public class StatisticsService implements IStatisticsService, IFloodlightModule 
         statisticsTopic = context.getServiceImpl(KafkaUtilityService.class).getKafkaChannel().getStatsTopic();
         region = context.getServiceImpl(KafkaUtilityService.class).getKafkaChannel().getRegion();
 
-        switchService.getAllSwitchMap().values()
-                .stream()
-                .filter(it -> !excludeSwitches.contains(it.getId()))
+        scope.removeAll(excludeSwitches);
+        switchService.getAllSwitchMap().values().stream()
+                .filter(it -> scope.contains(it.getId()))
                 .forEach(iofSwitch -> {
                     try {
                         gatherPortStats(iofSwitch);

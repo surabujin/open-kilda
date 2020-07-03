@@ -104,10 +104,11 @@ public class SpeakerToNetworkProxyBoltTest {
         subject.execute(tuple);
         ArgumentCaptor<Values> discoReplyValuesCaptor = ArgumentCaptor.forClass(Values.class);
 
-        verify(outputCollector).emit(eq(Stream.DISCO_REPLY), eq(tuple), discoReplyValuesCaptor.capture());
+        verify(outputCollector).emit(
+                eq(SpeakerToNetworkProxyBolt.STREAM_ALIVE_EVIDENCE_ID), eq(tuple), discoReplyValuesCaptor.capture());
 
-        assertEquals(switchAlpha.toString(), discoReplyValuesCaptor.getValue().get(0));
-        assertEquals(discoveryConfirmation, discoReplyValuesCaptor.getValue().get(1));
+        assertEquals(REGION_ONE, discoReplyValuesCaptor.getValue().get(0));
+        assertEquals(discoveryConfirmation.getTimestamp(), discoReplyValuesCaptor.getValue().get(1));
 
         ArgumentCaptor<Values> topoDiscoCaptor = ArgumentCaptor.forClass(Values.class);
         verify(outputCollector).emit(eq(tuple), topoDiscoCaptor.capture());

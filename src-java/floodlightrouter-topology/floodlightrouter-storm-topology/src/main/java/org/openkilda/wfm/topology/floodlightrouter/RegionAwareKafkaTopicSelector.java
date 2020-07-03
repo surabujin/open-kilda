@@ -45,17 +45,20 @@ public class RegionAwareKafkaTopicSelector implements KafkaTopicSelector {
         return formatTopicName(topic, region);
     }
 
-    private String formatTopicName(String topic, String region) {
-        if (Strings.isNullOrEmpty(region)) {
-            return topic;
-        }
-        return String.format("%s_%s", topic, region);
-    }
-
     private void reportError(Tuple tuple, String details, Object... arguments) {
         String source = tuple.getSourceComponent();
         String stream = tuple.getSourceStreamId();
         String message = String.format("Invalid %s(%s) tuple - ", source, stream) + details;
         log.error(message, arguments);
+    }
+
+    /**
+     * Make region-specific kafka topic name.
+     */
+    public static String formatTopicName(String topic, String region) {
+        if (Strings.isNullOrEmpty(region)) {
+            return topic;
+        }
+        return String.format("%s_%s", topic, region);
     }
 }

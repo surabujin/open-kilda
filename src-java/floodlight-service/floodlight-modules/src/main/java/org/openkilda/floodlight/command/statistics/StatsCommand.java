@@ -19,33 +19,43 @@ import org.openkilda.floodlight.command.Command;
 import org.openkilda.floodlight.command.CommandContext;
 import org.openkilda.floodlight.statistics.IStatisticsService;
 import org.openkilda.messaging.command.stats.StatsRequest;
+import org.openkilda.model.SwitchId;
 
-import com.google.common.collect.ImmutableList;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import org.projectfloodlight.openflow.types.DatapathId;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 public class StatsCommand extends Command {
     private final StatsRequest data;
+    private final Set<DatapathId> scope;
 
-    public StatsCommand(CommandContext context, StatsRequest data) {
+    public StatsCommand(CommandContext context, StatsRequest data, Set<SwitchId> scope) {
         super(context);
         this.data = data;
+        this.scope = mapDatapathId(scope);
     }
 
     @Override
     public Command call() throws Exception {
-        Set<DatapathId> excludedSwitches = Optional.ofNullable(data.getExcludeSwitchIds())
-                .orElse(ImmutableList.of())
-                .stream()
-                .map(it -> DatapathId.of(it.toLong()))
-                .collect(Collectors.toSet());
         FloodlightModuleContext moduleContext = getContext().getModuleContext();
         IStatisticsService statsService = moduleContext.getServiceImpl(IStatisticsService.class);
-        statsService.processStatistics(moduleContext, excludedSwitches);
+        statsService.processStatistics(moduleContext, mapDatapathId(data.getExcludeSwitchIds()), scope);
         return null;
+    }
+
+    private static Set<DatapathId> mapDatapathId(List<SwitchId> raw) {
+        return mapDatapathId(new HashSet<>(Optional.ofNullable(raw).orElse(Collections.emptyList())));
+    }
+
+    private static Set<DatapathId> mapDatapathId(Set<SwitchId> raw) {
+        return Optional.ofNullable(raw).orElse(Collections.emptySet()).stream()
+                .map(it -> DatapathId.of(it.toLong()))
+                .collect(Collectors.toSet());
     }
 }

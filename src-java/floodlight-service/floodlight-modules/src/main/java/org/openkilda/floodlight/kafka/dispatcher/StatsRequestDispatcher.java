@@ -18,22 +18,25 @@ package org.openkilda.floodlight.kafka.dispatcher;
 import org.openkilda.floodlight.command.Command;
 import org.openkilda.floodlight.command.CommandContext;
 import org.openkilda.floodlight.command.statistics.StatsCommand;
+import org.openkilda.messaging.command.BroadcastWrapper;
 import org.openkilda.messaging.command.CommandData;
 import org.openkilda.messaging.command.stats.StatsRequest;
 
-public class StatsRequestDispatcher extends CommandDispatcher<StatsRequest> {
+// FIXME(surabujin): make nested dispatching... if we are going to keep  this approach
+public class StatsRequestDispatcher extends CommandDispatcher<BroadcastWrapper> {
     @Override
     protected boolean checkAcceptability(CommandData payload) {
-        return payload instanceof StatsRequest;
+        return payload instanceof BroadcastWrapper
+                && ((BroadcastWrapper) payload).getPayload() instanceof StatsRequest;
     }
 
     @Override
-    protected StatsRequest unpack(CommandData payload) {
-        return (StatsRequest) payload;
+    protected BroadcastWrapper unpack(CommandData payload) {
+        return (BroadcastWrapper) payload;
     }
 
     @Override
-    protected Command makeCommand(CommandContext context, StatsRequest data) {
-        return new StatsCommand(context, data);
+    protected Command makeCommand(CommandContext context, BroadcastWrapper wrapper) {
+        return new StatsCommand(context, (StatsRequest) wrapper.getPayload(), wrapper.getScope());
     }
 }
