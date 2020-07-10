@@ -23,14 +23,20 @@ import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 import org.openkilda.wfm.topology.floodlightrouter.service.SwitchMonitorCarrier;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.text.diff.StringsComparator;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
+@Slf4j
 public abstract class SwitchConnectMonitor {
     protected final SwitchMonitorCarrier carrier;
     private final Clock clock;
@@ -121,6 +127,7 @@ public abstract class SwitchConnectMonitor {
 
     protected void becomeAvailable(InfoData notification, String region) {
         activeRegion = region;
+        log.info("Set {} active region for {} to \"{}\"", formatConnectMode(), switchId, activeRegion);
 
         carrier.regionUpdateNotification(new RegionMappingUpdate(switchId, activeRegion, isReadWriteMode()));
         carrier.switchStatusUpdateNotification(switchId, notification);
@@ -129,6 +136,7 @@ public abstract class SwitchConnectMonitor {
     protected void becomeUnavailable(InfoData notification) {
         becomeUnavailableAt = clock.instant();
         activeRegion = null;
+        log.info("There is no any {} available regions for {} - switch is unavailable", formatConnectMode(), switchId);
 
         carrier.regionUpdateNotification(new RegionMappingUpdate(switchId, null, isReadWriteMode()));
         carrier.switchStatusUpdateNotification(switchId, notification);
@@ -137,6 +145,9 @@ public abstract class SwitchConnectMonitor {
     protected abstract void becomeUnavailableDueToRegionOffline();
 
     protected void handleAvailableRegionsSetUpdate() {
+        log.info(
+                "List of {} availability zones for {} have changed to: {}",
+                formatConnectMode(), switchId, formatAvailableRegionsSet());
         if (!availableInRegions.contains(activeRegion) && !availableInRegions.isEmpty()) {
             swapActiveRegion();
         }
@@ -159,12 +170,26 @@ public abstract class SwitchConnectMonitor {
     private void swapActiveRegion() {
         Iterator<String> iter = availableInRegions.iterator();
         if (iter.hasNext()) {
+            String current = activeRegion;
             activeRegion = iter.next();
+            log.info(
+                    "Change {} active region for {} from \"{}\" to \"{}\"",
+                    formatConnectMode(), switchId, current, activeRegion);
             carrier.regionUpdateNotification(new RegionMappingUpdate(switchId, activeRegion, isReadWriteMode()));
         } else {
             throw new IllegalStateException(String.format(
                     "Unable to determine \"next\" available region for switch %s, availability regions set is empty",
                     switchId));
         }
+    }
+
+    private String formatConnectMode() {
+        return isReadWriteMode() ? "RW" : "RO";
+    }
+
+    private String formatAvailableRegionsSet() {
+        return "{" + availableInRegions.stream()
+                .sorted()
+                .collect(Collectors.joining(", ")) + "}";
     }
 }
