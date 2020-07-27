@@ -25,9 +25,11 @@ import org.openkilda.model.FeatureToggles;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.FeatureTogglesRepository;
 import org.openkilda.wfm.AbstractBolt;
+import org.openkilda.wfm.share.bolt.MonotonicClock;
 import org.openkilda.wfm.topology.floodlightrouter.ComponentType;
 import org.openkilda.wfm.topology.floodlightrouter.RegionAwareKafkaTopicSelector;
 import org.openkilda.wfm.topology.floodlightrouter.Stream;
+import org.openkilda.wfm.topology.floodlightrouter.TickId;
 import org.openkilda.wfm.topology.floodlightrouter.service.FloodlightTracker;
 import org.openkilda.wfm.topology.floodlightrouter.service.RegionMonitorCarrier;
 
@@ -56,6 +58,8 @@ public class RegionTrackerBolt extends AbstractBolt implements RegionMonitorCarr
     private final String kafkaSpeakerTopic;
 
     private final PersistenceManager persistenceManager;
+    private final MonotonicClock.Match<TickId> monotonicTickMatch = new MonotonicClock.Match<>(
+            MonotonicTick.BOLT_ID, null);
 
     private final Set<String> floodlights;
     private final long floodlightAliveTimeout;
@@ -83,7 +87,7 @@ public class RegionTrackerBolt extends AbstractBolt implements RegionMonitorCarr
     @Override
     protected void dispatch(Tuple input) throws Exception {
         String source = input.getSourceComponent();
-        if (MonotonicTick.BOLT_ID.equals(source)) {
+        if (monotonicTickMatch.isTick(input)) {
             handleTick();
         } else if (SpeakerToNetworkProxyBolt.BOLT_ID.equals(source)) {
             handleNetworkNotification(input);

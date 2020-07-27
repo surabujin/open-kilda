@@ -1,4 +1,4 @@
-/* Copyright 2019 Telstra Open Source
+/* Copyright 2020 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -17,16 +17,13 @@ package org.openkilda.wfm.topology.floodlightrouter.model;
 
 import org.openkilda.model.SwitchId;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Value;
+public class RegionMappingAdd extends RegionMappingUpdate {
+    public RegionMappingAdd(SwitchId switchId, String region, boolean readWriteMode) {
+        super(switchId, region, readWriteMode);
+    }
 
-@Getter
-@AllArgsConstructor
-public abstract class RegionMappingUpdate {
-    private final SwitchId switchId;
-    private final String region;
-    private final boolean readWriteMode;
-
-    public abstract void apply(RegionMappingStorage storage);
+    @Override
+    public void apply(RegionMappingStorage storage) {
+        storage.update(this);
+    }
 }

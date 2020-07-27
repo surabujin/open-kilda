@@ -49,7 +49,7 @@ public class OneToOneMappingTest {
 
         Assert.assertFalse(subject.lookup(SWITCH_ALPHA, false).isPresent());
 
-        // active mapping visible despite stale marker
+        // active mapping visible despite removed marker
         Assert.assertTrue(subject.lookup(SWITCH_BETA, true).isPresent());
         Assert.assertTrue(subject.lookup(SWITCH_BETA, false).isPresent());
     }
