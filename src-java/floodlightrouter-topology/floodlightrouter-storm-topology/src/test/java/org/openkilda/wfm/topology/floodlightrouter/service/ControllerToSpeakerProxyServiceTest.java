@@ -24,6 +24,7 @@ import org.openkilda.messaging.command.CommandMessage;
 import org.openkilda.messaging.command.stats.StatsRequest;
 import org.openkilda.model.SwitchId;
 import org.openkilda.stubs.ManualClock;
+import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingAdd;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 
 import com.google.common.collect.ImmutableSet;
@@ -38,11 +39,9 @@ import java.util.Set;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ControllerToSpeakerProxyServiceTest {
-    private static final String REGION_ALPHA = "region-alpha";
-    private static final String REGION_BETA = "region-beta";
-    private static final String REGION_GAMMA = "region-gamma";
-    private static final String REGION_DELTA = "region-delta";
-    
+    private static final String REGION_STATS = "stats";
+    private static final String REGION_MANAGEMENT = "management";
+
     private static final SwitchId SWITCH_ALPHA = new SwitchId(1);
     private static final SwitchId SWITCH_BETA = new SwitchId(2);
     private static final SwitchId SWITCH_GAMMA = new SwitchId(3);
@@ -57,15 +56,15 @@ public class ControllerToSpeakerProxyServiceTest {
     public void verifyStatsPreferRoRegions() {
         ControllerToSpeakerProxyService subject = makeSubject();
 
-        // sw-alpha in alpha - RO
-        subject.switchMappingUpdate(new RegionMappingUpdate(SWITCH_ALPHA, REGION_ALPHA, false));
+        // stats/RO only region
+        subject.switchMappingUpdate(new RegionMappingAdd(SWITCH_ALPHA, REGION_STATS, false));
+        subject.switchMappingUpdate(new RegionMappingAdd(SWITCH_BETA, REGION_STATS, false));
 
-        // sw-alpha in beta - RO+RW
-        subject.switchMappingUpdate(new RegionMappingUpdate(SWITCH_ALPHA, REGION_BETA, false));
-        subject.switchMappingUpdate(new RegionMappingUpdate(SWITCH_ALPHA, REGION_BETA, true));
-        // sw-beta in beta - RO
-        subject.switchMappingUpdate(new RegionMappingUpdate(SWITCH_BETA, REGION_BETA, false));
-        subject.switchMappingUpdate(new RegionMappingUpdate(SWITCH_BETA, REGION_BETA, true));
+        // management/RW region
+        subject.switchMappingUpdate(new RegionMappingAdd(SWITCH_BETA, REGION_MANAGEMENT, false));
+        subject.switchMappingUpdate(new RegionMappingAdd(SWITCH_BETA, REGION_MANAGEMENT, true));
+        subject.switchMappingUpdate(new RegionMappingAdd(SWITCH_GAMMA, REGION_MANAGEMENT, false));
+        subject.switchMappingUpdate(new RegionMappingAdd(SWITCH_GAMMA, REGION_MANAGEMENT, true));
 
         verifyZeroInteractions(carrier);
 
@@ -74,16 +73,15 @@ public class ControllerToSpeakerProxyServiceTest {
         subject.statsRequest(request, correlationId);
 
         // RO only region
+        verify(carrier).sendToSpeaker(makeStatsRegionRequest(
+                request, ImmutableSet.of(SWITCH_ALPHA, SWITCH_BETA), correlationId), REGION_STATS);
         verify(carrier).sendToSpeaker(
-                makeStatsRegionRequest(request, ImmutableSet.of(SWITCH_ALPHA), correlationId), REGION_ALPHA);
-        verify(carrier).sendToSpeaker(
-                makeStatsRegionRequest(request, ImmutableSet.of(SWITCH_BETA), correlationId), REGION_BETA);
+                makeStatsRegionRequest(request, ImmutableSet.of(SWITCH_GAMMA), correlationId), REGION_MANAGEMENT);
         verifyNoMoreInteractions(carrier);
     }
 
     private ControllerToSpeakerProxyService makeSubject() {
-        Set<String> allRegions = ImmutableSet.of(
-                REGION_ALPHA, REGION_BETA, REGION_GAMMA, REGION_DELTA);
+        Set<String> allRegions = ImmutableSet.of(REGION_STATS, REGION_MANAGEMENT);
         return new ControllerToSpeakerProxyService(clock, carrier, allRegions, switchMappingRemoveDelay);
     }
 

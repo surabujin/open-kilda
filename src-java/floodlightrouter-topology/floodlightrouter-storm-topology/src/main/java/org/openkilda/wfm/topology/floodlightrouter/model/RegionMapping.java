@@ -36,7 +36,7 @@ public class RegionMapping implements RegionMappingStorage {
      * Looks for a region for switchId.
      */
     public Optional<String> lookupReadWriteRegion(SwitchId switchId) {
-        return readWrite.lookup(switchId, true);
+        return readWrite.lookup(switchId);
     }
 
     public Map<String, Set<SwitchId>> organizeReadWritePopulationPerRegion() {

@@ -43,16 +43,13 @@ class OneToOneMapping implements MappingApproach {
     /**
      * Lookup entry.
      */
-    public Optional<String> lookup(SwitchId switchId, boolean allowStale) {
+    public Optional<String> lookup(SwitchId switchId) {
         flushStale();
         String result = actual.get(switchId);
         if (result != null) {
             return Optional.of(result);
         }
-        if (allowStale) {
-            return Optional.ofNullable(lookupStale(switchId));
-        }
-        return Optional.empty();
+        return Optional.ofNullable(lookupStale(switchId));
     }
 
     @Override

@@ -26,6 +26,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import org.openkilda.messaging.info.event.SwitchInfoData;
 import org.openkilda.model.SwitchId;
 import org.openkilda.stubs.ManualClock;
+import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingRemove;
+import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingSet;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 import org.openkilda.wfm.topology.floodlightrouter.service.SwitchMonitorCarrier;
 
@@ -62,13 +64,13 @@ public abstract class SwitchConnectMonitorTest {
         verify(carrier, times(1))
                 .switchStatusUpdateNotification(eq(connectEvent.getSwitchId()), eq(connectEvent));
         verify(carrier).regionUpdateNotification(
-                eq(new RegionMappingUpdate(connectEvent.getSwitchId(), REGION_A, subject.isReadWriteMode())));
+                eq(new RegionMappingSet(connectEvent.getSwitchId(), REGION_A, subject.isReadWriteMode())));
 
         subject.handleSwitchStatusNotification(connectEvent, REGION_B);
         verify(carrier, times(1))
                 .switchStatusUpdateNotification(eq(connectEvent.getSwitchId()), eq(connectEvent));
         verify(carrier, never()).regionUpdateNotification(
-                eq(new RegionMappingUpdate(connectEvent.getSwitchId(), REGION_B, subject.isReadWriteMode())));
+                eq(new RegionMappingSet(connectEvent.getSwitchId(), REGION_B, subject.isReadWriteMode())));
     }
 
     @Test
@@ -79,7 +81,7 @@ public abstract class SwitchConnectMonitorTest {
         subject.handleSwitchStatusNotification(connectEvent, REGION_A);
         verify(carrier).switchStatusUpdateNotification(eq(connectEvent.getSwitchId()), eq(connectEvent));
         verify(carrier).regionUpdateNotification(
-                eq(new RegionMappingUpdate(connectEvent.getSwitchId(), REGION_A, subject.isReadWriteMode())));
+                eq(new RegionMappingSet(connectEvent.getSwitchId(), REGION_A, subject.isReadWriteMode())));
 
         Instant now = clock.adjust(Duration.ofSeconds(1));
 
@@ -108,7 +110,7 @@ public abstract class SwitchConnectMonitorTest {
         subject.handleSwitchStatusNotification(disconnectEvent, REGION_A);
         // change active region
         verify(carrier).regionUpdateNotification(
-                eq(new RegionMappingUpdate(disconnectEvent.getSwitchId(), REGION_B, subject.isReadWriteMode())));
+                eq(new RegionMappingSet(disconnectEvent.getSwitchId(), REGION_B, subject.isReadWriteMode())));
         reset(carrier);
 
         Instant failedAt = clock.adjust(Duration.ofSeconds(1));
@@ -118,7 +120,7 @@ public abstract class SwitchConnectMonitorTest {
 
         verify(carrier).switchStatusUpdateNotification(eq(disconnectEvent.getSwitchId()), eq(disconnectEvent));
         verify(carrier).regionUpdateNotification(
-                eq(new RegionMappingUpdate(disconnectEvent.getSwitchId(), null, subject.isReadWriteMode())));
+                eq(new RegionMappingRemove(disconnectEvent.getSwitchId(), null, subject.isReadWriteMode())));
         verifyNoMoreInteractions(carrier);
     }
 

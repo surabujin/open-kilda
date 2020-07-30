@@ -34,7 +34,7 @@ public class ControllerToSpeakerBroadcastBolt extends ControllerToSpeakerProxyBo
     public void handleInput(Tuple input) throws PipelineException {
         Object payload = pullControllerPayload(input);
         for (String region : allRegions) {
-            proxyRequestToSpeaker(payload, region);
+            // TODO - drop
         }
     }
 }
