@@ -52,6 +52,6 @@ public class StatsKafkaMessageCollector extends KafkaMessageCollector {
                                 ConsumerLauncher launcher) {
         ExecutorService generalExecutor = buildExecutorWithNoQueue(consumerConfig.getGeneralExecutorCount());
         logger.info("Kafka Consumer: general executor threads = {}", consumerConfig.getGeneralExecutorCount());
-        launcher.launch(generalExecutor, new KafkaConsumerSetup(kafkaChannel.getStatsStatsRequetstPrivRegionTopic()));
+        launcher.launch(generalExecutor, new KafkaConsumerSetup(kafkaChannel.getSpeakerTopic()));
     }
 }

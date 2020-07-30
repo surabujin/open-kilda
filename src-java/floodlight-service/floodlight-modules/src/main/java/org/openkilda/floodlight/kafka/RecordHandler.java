@@ -68,7 +68,6 @@ import org.openkilda.floodlight.error.SwitchOperationException;
 import org.openkilda.floodlight.error.UnsupportedSwitchOperationException;
 import org.openkilda.floodlight.kafka.dispatcher.BroadcastStatsRequestDispatcher;
 import org.openkilda.floodlight.kafka.dispatcher.CommandDispatcher;
-import org.openkilda.floodlight.kafka.dispatcher.ListSwitchDispatcher;
 import org.openkilda.floodlight.kafka.dispatcher.PingRequestDispatcher;
 import org.openkilda.floodlight.kafka.dispatcher.RemoveBfdSessionDispatcher;
 import org.openkilda.floodlight.kafka.dispatcher.SetupBfdSessionDispatcher;
@@ -1779,8 +1778,7 @@ class RecordHandler implements Runnable {
                 new SetupBfdSessionDispatcher(),
                 new RemoveBfdSessionDispatcher(),
                 new StatsRequestDispatcher(),  // TODO(surabujin): remove together with statsrouter
-                new BroadcastStatsRequestDispatcher(),
-                new ListSwitchDispatcher());
+                new BroadcastStatsRequestDispatcher());
 
         public Factory(ConsumerContext context) {
             this.context = context;
