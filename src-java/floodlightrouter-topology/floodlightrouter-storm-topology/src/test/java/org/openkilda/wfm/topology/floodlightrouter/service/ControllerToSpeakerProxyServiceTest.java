@@ -25,7 +25,6 @@ import org.openkilda.messaging.command.stats.StatsRequest;
 import org.openkilda.model.SwitchId;
 import org.openkilda.stubs.ManualClock;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingAdd;
-import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 
 import com.google.common.collect.ImmutableSet;
 import org.junit.Test;
@@ -34,7 +33,6 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Set;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -69,7 +67,7 @@ public class ControllerToSpeakerProxyServiceTest {
         verifyZeroInteractions(carrier);
 
         String correlationId = "dummy-request";
-        StatsRequest request = new StatsRequest(Collections.emptyList());
+        StatsRequest request = new StatsRequest();
         subject.statsRequest(request, correlationId);
 
         // RO only region

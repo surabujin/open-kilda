@@ -19,7 +19,6 @@ import org.openkilda.messaging.Utils;
 import org.openkilda.messaging.command.stats.StatsRequest;
 import org.openkilda.model.SwitchId;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import org.junit.Assert;
 import org.junit.Test;

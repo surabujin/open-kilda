@@ -18,10 +18,11 @@ package org.openkilda.wfm.topology.floodlightrouter.model;
 import org.openkilda.model.SwitchId;
 
 import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.Value;
 
 @Getter
+@EqualsAndHashCode
 @AllArgsConstructor
 public abstract class RegionMappingUpdate {
     private final SwitchId switchId;

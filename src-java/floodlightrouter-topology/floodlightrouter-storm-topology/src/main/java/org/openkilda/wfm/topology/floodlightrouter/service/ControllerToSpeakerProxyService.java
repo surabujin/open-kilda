@@ -22,8 +22,8 @@ import org.openkilda.messaging.command.CommandData;
 import org.openkilda.messaging.command.CommandMessage;
 import org.openkilda.messaging.command.stats.StatsRequest;
 import org.openkilda.model.SwitchId;
-import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMapping;
+import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 
 import com.google.common.collect.ImmutableSet;
 import lombok.extern.slf4j.Slf4j;
@@ -70,6 +70,9 @@ public class ControllerToSpeakerProxyService {
         proxyUnicastRequest(new ProxyHsMessageWrapper(message), switchId);
     }
 
+    /**
+     * Route request into all known regions.
+     */
     public void broadcastRequest(CommandMessage message) {
         Map<String, Set<SwitchId>> population = switchMapping.organizeReadWritePopulationPerRegion();
         for (String region : allRegions) {
@@ -80,6 +83,9 @@ public class ControllerToSpeakerProxyService {
         }
     }
 
+    /**
+     * Route {@link StatsRequest}. Prefer to RO only regions.
+     */
     public void statsRequest(StatsRequest request, String correlationId) {
         Map<String, Set<SwitchId>> rwPopulation = switchMapping.organizeReadWritePopulationPerRegion();
         Map<String, Set<SwitchId>> roPopulation = switchMapping.organizeReadOnlyPopulationPerRegion();

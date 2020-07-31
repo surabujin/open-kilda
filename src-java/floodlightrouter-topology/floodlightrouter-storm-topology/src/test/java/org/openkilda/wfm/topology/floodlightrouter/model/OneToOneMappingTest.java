@@ -47,10 +47,11 @@ public class OneToOneMappingTest {
         Assert.assertTrue(result.isPresent());
         Assert.assertEquals(REGION_A, result.get());
 
-        Assert.assertFalse(subject.lookup(SWITCH_ALPHA).isPresent());
+        Assert.assertTrue(subject.lookup(SWITCH_ALPHA).isPresent());  // remove is delayed
+        clock.adjust(staleDelay.plus(Duration.ofSeconds(1)));
+        Assert.assertFalse(subject.lookup(SWITCH_ALPHA).isPresent());  // remove is delayed
 
         // active mapping visible despite removed marker
-        Assert.assertTrue(subject.lookup(SWITCH_BETA).isPresent());
         Assert.assertTrue(subject.lookup(SWITCH_BETA).isPresent());
     }
 

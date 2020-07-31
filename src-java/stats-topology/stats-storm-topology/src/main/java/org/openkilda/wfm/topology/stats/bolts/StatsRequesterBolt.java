@@ -30,7 +30,6 @@ import org.openkilda.wfm.AbstractBolt;
 import org.openkilda.wfm.topology.AbstractTopology;
 import org.openkilda.wfm.topology.stats.StatsComponentType;
 
-import com.google.common.collect.ImmutableList;
 import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;

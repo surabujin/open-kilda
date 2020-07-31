@@ -23,7 +23,6 @@ import org.openkilda.messaging.info.switches.UnmanagedSwitchNotification;
 import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingRemove;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingSet;
-import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 import org.openkilda.wfm.topology.floodlightrouter.service.SwitchMonitorCarrier;
 
 import lombok.extern.slf4j.Slf4j;

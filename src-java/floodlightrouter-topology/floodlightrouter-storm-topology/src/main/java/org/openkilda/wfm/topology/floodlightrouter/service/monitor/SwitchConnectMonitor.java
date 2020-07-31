@@ -19,7 +19,6 @@ import org.openkilda.messaging.info.InfoData;
 import org.openkilda.messaging.info.discovery.NetworkDumpSwitchData;
 import org.openkilda.messaging.info.event.SwitchInfoData;
 import org.openkilda.model.SwitchId;
-import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 import org.openkilda.wfm.topology.floodlightrouter.service.SwitchMonitorCarrier;
 
 import lombok.Getter;
@@ -28,8 +27,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 

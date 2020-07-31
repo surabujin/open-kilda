@@ -15,13 +15,13 @@
 
 package org.openkilda.wfm.topology.floodlightrouter.service.monitor;
 
+import org.openkilda.messaging.info.InfoData;
 import org.openkilda.messaging.info.discovery.NetworkDumpSwitchData;
 import org.openkilda.messaging.info.event.SwitchChangeType;
 import org.openkilda.messaging.info.event.SwitchInfoData;
 import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingAdd;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingRemove;
-import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingUpdate;
 import org.openkilda.wfm.topology.floodlightrouter.service.SwitchMonitorCarrier;
 
 import java.time.Clock;
@@ -37,6 +37,18 @@ public class SwitchReadOnlyConnectMonitor extends SwitchConnectMonitor {
         if (! switchData.isReadWriteMode()) {
             super.handleNetworkDumpResponse(switchData, region);
         }
+    }
+
+    @Override
+    protected void becomeAvailable(InfoData notification, String region) {
+        super.becomeAvailable(notification, region);
+        carrier.switchStatusUpdateNotification(switchId, notification);
+    }
+
+    @Override
+    protected void becomeUnavailable(InfoData notification) {
+        super.becomeUnavailable(notification);
+        carrier.switchStatusUpdateNotification(switchId, notification);
     }
 
     @Override

@@ -18,15 +18,12 @@ package org.openkilda.floodlight.command.statistics;
 import org.openkilda.floodlight.command.Command;
 import org.openkilda.floodlight.command.CommandContext;
 import org.openkilda.floodlight.statistics.IStatisticsService;
-import org.openkilda.messaging.command.stats.StatsRequest;
 import org.openkilda.model.SwitchId;
 
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import org.projectfloodlight.openflow.types.DatapathId;
 
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
