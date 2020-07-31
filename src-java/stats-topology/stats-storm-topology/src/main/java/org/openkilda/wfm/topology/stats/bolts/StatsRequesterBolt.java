@@ -69,9 +69,8 @@ public class StatsRequesterBolt extends AbstractBolt {
             unhandledInput(input);
             return;
         }
-        StatsRequest statsRequestData = new StatsRequest(ImmutableList.of());
-        CommandMessage statsRequest = new CommandMessage(statsRequestData,
-                System.currentTimeMillis(), getCommandContext().getCorrelationId());
+        CommandMessage statsRequest = new CommandMessage(
+                new StatsRequest(), System.currentTimeMillis(), getCommandContext().getCorrelationId());
         Values values = new Values(statsRequest);
         emit(STATS_REQUEST.name(), input, values);
 

@@ -27,14 +27,7 @@ import lombok.Value;
 import java.util.List;
 
 @Value
-@Builder
 @EqualsAndHashCode(callSuper = false)
 public class StatsRequest extends CommandData {
-    @JsonProperty("exclude_switch_ids")
-    private List<SwitchId> excludeSwitchIds;
-
-    @JsonCreator
-    public StatsRequest(@JsonProperty("exclude_switch_ids") List<SwitchId> excludeSwitchIds) {
-        this.excludeSwitchIds = excludeSwitchIds;
-    }
+    // this request no need payload/fields
 }
