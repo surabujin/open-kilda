@@ -4,8 +4,8 @@ Internal data:
 Input signals
 * port-add
 * port-del
-* enable_update
-* disable
+* enable_update (ISL-FSM)
+* disable (ISL-FSM)
 * delete
 * session-del
 * online
