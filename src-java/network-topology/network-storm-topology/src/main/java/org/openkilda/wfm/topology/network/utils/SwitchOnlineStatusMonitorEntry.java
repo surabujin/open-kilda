@@ -16,22 +16,13 @@
 
 package org.openkilda.wfm.topology.network.utils;
 
-import org.openkilda.model.SwitchId;
-
-import java.util.HashMap;
-import java.util.Map;
-
-public class SwitchOnlineStatusMonitor
-        extends BaseMonitor<SwitchId, SwitchOnlineStatusListener, Boolean, SwitchOnlineStatusMonitorEntry> {
-    private final static SwitchOnlineStatusMonitorEntry dummy = new SwitchOnlineStatusMonitorEntry();
-
-    @Override
-    protected SwitchOnlineStatusMonitorEntry makeEntry(SwitchId reference) {
-        return new SwitchOnlineStatusMonitorEntry();
+class SwitchOnlineStatusMonitorEntry extends BaseMonitorEntry<SwitchOnlineStatusListener, Boolean> {
+    public SwitchOnlineStatusMonitorEntry() {
+        super(false);
     }
 
     @Override
-    protected SwitchOnlineStatusMonitorEntry getDummyEntry() {
-        return dummy;
+    void propagate(SwitchOnlineStatusListener listener, Boolean change) {
+        listener.switchOnlineStatusUpdate(change);
     }
 }

@@ -35,6 +35,7 @@ import org.openkilda.wfm.topology.network.model.LinkStatus;
 import org.openkilda.wfm.topology.network.model.NetworkOptions;
 import org.openkilda.wfm.topology.network.model.OnlineStatus;
 import org.openkilda.wfm.topology.network.model.RoundTripStatus;
+import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 
 import lombok.Data;
 
@@ -71,7 +72,10 @@ public class NetworkIntegrationCarrier
         portService = new NetworkPortService(this, persistenceManager);
         uniIslService = new NetworkUniIslService(this);
         islService = new NetworkIslService(this, persistenceManager, options);
-        bfdLogicalPortService = new NetworkBfdLogicalPortService(this, options.getBfdLogicalPortOffset());
+
+        SwitchOnlineStatusMonitor switchOnlineStatusMonitor = new SwitchOnlineStatusMonitor();
+        bfdLogicalPortService = new NetworkBfdLogicalPortService(
+                this, switchOnlineStatusMonitor, options.getBfdLogicalPortOffset());
         bfdSessionService = new NetworkBfdSessionService(this, persistenceManager);
         bfdGlobalToggleService = new NetworkBfdGlobalToggleService(this, persistenceManager);
     }
@@ -268,11 +272,6 @@ public class NetworkIntegrationCarrier
     @Override
     public void sendBfdLinkStatusUpdate(Endpoint logicalEndpoint, LinkStatus linkStatus) {
         bfdSessionService.updateLinkStatus(logicalEndpoint, linkStatus);
-    }
-
-    @Override
-    public void sendBfdSwitchStatusUpdate(Endpoint endpoint, boolean isOnline) {
-        bfdLogicalPortService.updateOnlineStatus(endpoint, isOnline);
     }
 
     @Override

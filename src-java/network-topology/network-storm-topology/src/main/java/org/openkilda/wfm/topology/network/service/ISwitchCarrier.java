@@ -37,8 +37,6 @@ public interface ISwitchCarrier {
 
     void sendBfdLinkStatusUpdate(Endpoint logicalEndpoint, LinkStatus linkStatus);
 
-    void sendBfdSwitchStatusUpdate(Endpoint endpoint, boolean isOnline);
-
     void sendSwitchSynchronizeRequest(String key, SwitchId switchId);
 
     void sendAffectedFlowRerouteRequest(SwitchId switchId);

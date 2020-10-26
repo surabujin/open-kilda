@@ -18,16 +18,15 @@ package org.openkilda.wfm.topology.network.service;
 import org.openkilda.messaging.error.ErrorData;
 import org.openkilda.messaging.info.InfoData;
 import org.openkilda.model.BfdProperties;
-import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdLogicalPortFsm;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdLogicalPortFsm.BfdLogicalPortFsmContext;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdLogicalPortFsm.BfdLogicalPortFsmFactory;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdLogicalPortFsm.Event;
-import org.openkilda.wfm.topology.network.controller.bfd.SwitchStatusMonitor;
 import org.openkilda.wfm.topology.network.error.BfdLogicalPortControllerNotFoundException;
 import org.openkilda.wfm.topology.network.model.BfdSessionData;
+import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,13 +37,16 @@ import java.util.Map;
 public class NetworkBfdLogicalPortService {
     private final BfdLogicalPortFsm.BfdLogicalPortFsmFactory controllerFactory;
 
+    private final SwitchOnlineStatusMonitor switchOnlineStatusMonitor;
     private final int logicalPortNumberOffset;
 
     private final Map<Endpoint, BfdLogicalPortFsm> controllerByPhysicalEndpoint = new HashMap<>();
     private final Map<Endpoint, BfdLogicalPortFsm> controllerByLogicalEndpoint = new HashMap<>();
-    private final Map<SwitchId, SwitchStatusMonitor> statusMonitorMap = new HashMap<>();
 
-    public NetworkBfdLogicalPortService(IBfdLogicalPortCarrier carrier, int logicalPortNumberOffset) {
+    public NetworkBfdLogicalPortService(
+            IBfdLogicalPortCarrier carrier, SwitchOnlineStatusMonitor switchOnlineStatusMonitor,
+            int logicalPortNumberOffset) {
+        this.switchOnlineStatusMonitor = switchOnlineStatusMonitor;
         this.logicalPortNumberOffset = logicalPortNumberOffset;
 
         controllerFactory = BfdLogicalPortFsm.factory(carrier);
@@ -107,26 +109,6 @@ public class NetworkBfdLogicalPortService {
             return;
         }
         handle(controller, Event.DELETE);
-    }
-
-    /**
-     * Handle switch online status update.
-     */
-    public void updateOnlineStatus(SwitchId switchId, boolean isOnline) {
-        logServiceCall("UPDATE-ONLINE-STATUS switchId={}, isOnline={}", switchId, isOnline);
-        SwitchStatusMonitor monitor = lookupStatusMonitorCreateIfMissing(switchId);
-        monitor.updateStatus(isOnline);
-        removeStatusMonitorIfEmpty(monitor);
-    }
-
-    /**
-     * Handle switch(specific port) online status update.
-     */
-    public void updateOnlineStatus(Endpoint logical, boolean isOnline) {
-        logServiceCall("UPDATE-ONLINE-STATUS logical={}, isOnline={}", logical, isOnline);
-        BfdLogicalPortFsm controller = lookupControllerByLogicalEndpoint(logical);
-        lookupStatusMonitorCreateIfMissing(logical.getDatapath())
-                .updateStatus(controller.getPhysicalEndpoint(), isOnline);
     }
 
     /**
@@ -194,7 +176,7 @@ public class NetworkBfdLogicalPortService {
 
     private BfdLogicalPortFsm createController(Endpoint physical, int logicalPortNumber) {
         BfdLogicalPortFsm controller = controllerFactory.produce(
-                lookupStatusMonitorCreateIfMissing(physical.getDatapath()), physical, logicalPortNumber);
+                switchOnlineStatusMonitor, physical, logicalPortNumber);
         controllerByPhysicalEndpoint.put(physical, controller);
         controllerByLogicalEndpoint.put(controller.getLogicalEndpoint(), controller);
         return controller;
@@ -208,22 +190,6 @@ public class NetworkBfdLogicalPortService {
         log.debug(
                 "BFD logical port controller {} pysical-port={} have done it's jobs and been deleted",
                 logical, physical.getPortNumber());
-
-        SwitchStatusMonitor statusMonitor = lookupStatusMonitorCreateIfMissing(logical.getDatapath());
-        statusMonitor.delController(controller);
-        removeStatusMonitorIfEmpty(statusMonitor);
-    }
-
-    private SwitchStatusMonitor lookupStatusMonitorCreateIfMissing(SwitchId switchId) {
-        return statusMonitorMap.computeIfAbsent(switchId, SwitchStatusMonitor::new);
-    }
-
-    private void removeStatusMonitorIfEmpty(SwitchStatusMonitor monitor) {
-        if (monitor.isEmpty()) {
-            SwitchId switchId = monitor.getSwitchId();
-            statusMonitorMap.remove(switchId);
-            log.debug("Switch's online status monitor for {} have been deleted (not needed anymore)", switchId);
-        }
     }
 
     private void logServiceCall(String format, Object... arguments) {

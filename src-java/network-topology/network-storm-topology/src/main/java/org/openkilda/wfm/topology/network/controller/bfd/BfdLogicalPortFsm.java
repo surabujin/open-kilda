@@ -26,6 +26,8 @@ import org.openkilda.wfm.topology.network.controller.bfd.BfdLogicalPortFsm.Event
 import org.openkilda.wfm.topology.network.controller.bfd.BfdLogicalPortFsm.State;
 import org.openkilda.wfm.topology.network.model.BfdSessionData;
 import org.openkilda.wfm.topology.network.service.IBfdLogicalPortCarrier;
+import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusListener;
+import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -39,10 +41,11 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Slf4j
-public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State, Event, BfdLogicalPortFsmContext> {
+public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State, Event, BfdLogicalPortFsmContext>
+        implements SwitchOnlineStatusListener {
     private final IBfdLogicalPortCarrier carrier;
 
-    private final SwitchStatusMonitor switchStatusMonitor;
+    private final SwitchOnlineStatusMonitor switchOnlineStatusMonitor;
 
     private final Set<String> activeRequest = new HashSet<>();
 
@@ -54,14 +57,14 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
     private BfdSessionData sessionData;
 
     public BfdLogicalPortFsm(
-            IBfdLogicalPortCarrier carrier, SwitchStatusMonitor switchStatusMonitor,
+            IBfdLogicalPortCarrier carrier, SwitchOnlineStatusMonitor switchOnlineStatusMonitor,
             Endpoint physicalEndpoint, Integer logicalPortNumber) {
         this.carrier = carrier;
-        this.switchStatusMonitor = switchStatusMonitor;
+        this.switchOnlineStatusMonitor = switchOnlineStatusMonitor;
         this.physicalEndpoint = physicalEndpoint;
         this.logicalPortNumber = logicalPortNumber;
 
-        switchStatusMonitor.addController(this);
+        switchOnlineStatusMonitor.subscribe(physicalEndpoint.getDatapath(), this);
         carrier.logicalPortControllerAddNotification(physicalEndpoint);
     }
 
@@ -94,6 +97,12 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         } else {
             reportWorkerResponseIgnored(requestId, response);
         }
+    }
+
+    @Override
+    public void switchOnlineStatusUpdate(boolean isOnline) {
+        BfdLogicalPortFsmContext context = BfdLogicalPortFsmContext.builder().build();
+        BfdLogicalPortFsmFactory.EXECUTOR.fire(this, isOnline ? Event.ONLINE : Event.OFFLINE, context);
     }
 
     public Endpoint getLogicalEndpoint() {
@@ -131,6 +140,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
     }
 
     public void stopEnterAction(State from, State to, Event event, BfdLogicalPortFsmContext context) {
+        switchOnlineStatusMonitor.unsubscribe(physicalEndpoint.getDatapath(), this);
         carrier.logicalPortControllerDelNotification(physicalEndpoint);
     }
 
@@ -187,7 +197,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
     private void sendPortCreateRequest() {
         Endpoint logical = getLogicalEndpoint();
-        if (switchStatusMonitor.isOnline()) {
+        if (switchOnlineStatusMonitor.getStatus(physicalEndpoint.getDatapath())) {
             activeRequest.add(carrier.createLogicalPort(logical, physicalEndpoint.getPortNumber()));
         } else {
             log.debug("Do not send logical port {} create request because the switch is offline now", logical);
@@ -196,7 +206,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
     private void sendPortDeleteRequest() {
         Endpoint logical = getLogicalEndpoint();
-        if (switchStatusMonitor.isOnline()) {
+        if (switchOnlineStatusMonitor.getStatus(physicalEndpoint.getDatapath())) {
             activeRequest.add(carrier.deleteLogicalPort(logical));
         } else {
             log.debug("Do not send logical port {} delete request because the switch is offline now", logical);
@@ -268,7 +278,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
             builder = StateMachineBuilderFactory.create(
                     BfdLogicalPortFsm.class, State.class, Event.class, BfdLogicalPortFsmContext.class,
                     // extra parameters
-                    IBfdLogicalPortCarrier.class, SwitchStatusMonitor.class, Endpoint.class, Integer.class);
+                    IBfdLogicalPortCarrier.class, SwitchOnlineStatusMonitor.class, Endpoint.class, Integer.class);
 
             final String sendSessionDisableAction = "sendSessionDisableAction";
             final String sendSessionEnableUpdateAction = "sendSessionEnableUpdateAction";
@@ -389,9 +399,9 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         }
 
         public BfdLogicalPortFsm produce(
-                SwitchStatusMonitor switchStatusMonitor, Endpoint physicalEndpoint, int logicalPortNumber) {
+                SwitchOnlineStatusMonitor switchOnlineStatusMonitor, Endpoint physicalEndpoint, int logicalPortNumber) {
             BfdLogicalPortFsm fsm = builder.newStateMachine(
-                    State.ENTER, carrier, switchStatusMonitor, physicalEndpoint, logicalPortNumber);
+                    State.ENTER, carrier, switchOnlineStatusMonitor, physicalEndpoint, logicalPortNumber);
             fsm.start();
             // FIXME - DEBUG!
             new StateMachineLogger(fsm).startLogging();

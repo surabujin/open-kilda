@@ -54,6 +54,7 @@ import org.openkilda.wfm.topology.network.storm.bolt.speaker.bcast.SpeakerBcast;
 import org.openkilda.wfm.topology.network.storm.bolt.sw.SwitchHandler;
 import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslBfdStatusUpdateCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslCommand;
+import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 import org.openkilda.wfm.topology.utils.MessageKafkaTranslator;
 
 import org.apache.storm.topology.OutputFieldsDeclarer;
@@ -80,6 +81,8 @@ public class BfdHub extends AbstractBolt
 
     private final NetworkOptions options;
     private final PersistenceManager persistenceManager;
+
+    private transient SwitchOnlineStatusMonitor switchOnlineStatusMonitor;
 
     private transient NetworkBfdLogicalPortService logicalPortService;
     private transient NetworkBfdSessionService sessionService;
@@ -288,11 +291,7 @@ public class BfdHub extends AbstractBolt
     }
 
     public void processOnlineStatusUpdate(SwitchId switchId, boolean isOnline) {
-        logicalPortService.updateOnlineStatus(switchId, isOnline);
-    }
-
-    public void processOnlineStatusUpdate(Endpoint logical, boolean isOnline) {
-        logicalPortService.updateOnlineStatus(logical, isOnline);
+        switchOnlineStatusMonitor.update(switchId, isOnline);
     }
 
     public void processLogicalPortCreateResponse(
@@ -326,7 +325,10 @@ public class BfdHub extends AbstractBolt
 
     @Override
     protected void init() {
-        logicalPortService = new NetworkBfdLogicalPortService(this, options.getBfdLogicalPortOffset());
+        switchOnlineStatusMonitor = new SwitchOnlineStatusMonitor();
+
+        logicalPortService = new NetworkBfdLogicalPortService(
+                this, switchOnlineStatusMonitor, options.getBfdLogicalPortOffset());
         sessionService = new NetworkBfdSessionService(this, persistenceManager);
         globalToggleService = new NetworkBfdGlobalToggleService(this, persistenceManager);
         requestIdFactory = new TaskIdBasedKeyFactory(getTaskId());

@@ -29,8 +29,10 @@ import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.error.ControllerNotFoundException;
+import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -54,6 +56,13 @@ public class NetworkBfdLogicalPortServiceTest {
     @Mock
     private IBfdLogicalPortCarrier carrier;
 
+    private SwitchOnlineStatusMonitor switchOnlineStatusMonitor;
+
+    @Before
+    public void setUp() throws Exception {
+        switchOnlineStatusMonitor = new SwitchOnlineStatusMonitor();
+    }
+
     @Test
     public void greenField() {
         NetworkBfdLogicalPortService service = makeService();
@@ -65,7 +74,7 @@ public class NetworkBfdLogicalPortServiceTest {
         verifyNoMoreInteractions(carrier);
         reset(carrier);
 
-        service.updateOnlineStatus(physical.getDatapath(), true);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
         verify(carrier).createLogicalPort(eq(logical), eq(physical.getPortNumber()));
         verifyNoMoreInteractions(carrier);
         reset(carrier);
@@ -81,7 +90,6 @@ public class NetworkBfdLogicalPortServiceTest {
                 true);
         service.workerSuccess(createRequestId, logical, createResponse);
         service.portAdd(logical, physical.getPortNumber());
-        service.updateOnlineStatus(logical, true);
 
         verifyGenericWorkflow(service);
     }
@@ -90,8 +98,9 @@ public class NetworkBfdLogicalPortServiceTest {
     public void brownField() {
         NetworkBfdLogicalPortService service = makeService();
 
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
+
         service.portAdd(logical, physical.getPortNumber());
-        service.updateOnlineStatus(logical, true);
         service.apply(physical, reference, propertiesEnabled);
     }
 
@@ -102,13 +111,13 @@ public class NetworkBfdLogicalPortServiceTest {
         reset(carrier);
 
         // proxy offline
-        service.updateOnlineStatus(physical.getDatapath(), false);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), false);
         verify(carrier).updateSessionOnlineStatus(eq(logical), eq(false));
         verifyNoMoreInteractions(carrier);
         reset(carrier);
 
         // proxy online
-        service.updateOnlineStatus(physical.getDatapath(), true);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
         verify(carrier).updateSessionOnlineStatus(eq(logical), eq(true));
         verifyNoMoreInteractions(carrier);
         reset(carrier);
@@ -146,12 +155,10 @@ public class NetworkBfdLogicalPortServiceTest {
     @Test
     public void testApply() {
         NetworkBfdLogicalPortService service = makeService();
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
 
         service.portAdd(logical, physical.getPortNumber());
         verify(carrier).logicalPortControllerAddNotification(eq(physical));
-        reset(carrier);
-
-        service.updateOnlineStatus(logical, true);
         verify(carrier).createSession(eq(logical), eq(physical.getPortNumber()));
         verifyNoMoreInteractions(carrier);
         reset(carrier);
@@ -171,7 +178,7 @@ public class NetworkBfdLogicalPortServiceTest {
     @Test
     public void replacePropertiesDuringCreate() {
         NetworkBfdLogicalPortService service = makeService();
-        service.updateOnlineStatus(physical.getDatapath(), true);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
 
         final String requestId = "port-create-request";
         when(carrier.createLogicalPort(eq(logical), eq(physical.getPortNumber()))).thenReturn(requestId);
@@ -186,16 +193,15 @@ public class NetworkBfdLogicalPortServiceTest {
         verifyNoMoreInteractions(carrier);
 
         service.portAdd(logical, physical.getPortNumber());
-        service.updateOnlineStatus(logical, true);
         verify(carrier).enableUpdateSession(eq(physical), eq(reference), eq(altProperties));
     }
 
     @Test
     public void enableDuringCleanup() {
         NetworkBfdLogicalPortService service = makeService();
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
 
         service.portAdd(logical, physical.getPortNumber());
-        service.updateOnlineStatus(logical, true);
         service.apply(physical, reference, propertiesEnabled);
         verify(carrier).logicalPortControllerAddNotification(eq(physical));
         reset(carrier);
@@ -214,7 +220,6 @@ public class NetworkBfdLogicalPortServiceTest {
                 (short) (propertiesEnabled.getMultiplier() + 1));
         service.apply(physical, reference, altProperties);
         service.portAdd(logical, physical.getPortNumber());
-        service.updateOnlineStatus(logical, true);
 
         verify(carrier).createSession(eq(logical), eq(physical.getPortNumber()));
         verify(carrier).enableUpdateSession(eq(physical), eq(reference), eq(altProperties));
@@ -223,7 +228,7 @@ public class NetworkBfdLogicalPortServiceTest {
     @Test
     public void offlineDuringCreate() {
         NetworkBfdLogicalPortService service = makeService();
-        service.updateOnlineStatus(physical.getDatapath(), true);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
 
         final String requestId = "port-create-request";
         when(carrier.createLogicalPort(eq(logical), eq(physical.getPortNumber()))).thenReturn(requestId);
@@ -231,20 +236,20 @@ public class NetworkBfdLogicalPortServiceTest {
         verify(carrier).createLogicalPort(eq(logical), eq(physical.getPortNumber()));
         reset(carrier);
 
-        service.updateOnlineStatus(physical.getDatapath(), false);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), false);
         verifyNoMoreInteractions(carrier);
 
         when(carrier.createLogicalPort(eq(logical), eq(physical.getPortNumber()))).thenReturn(requestId);
-        service.updateOnlineStatus(physical.getDatapath(), true);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
         verify(carrier).createLogicalPort(eq(logical), eq(physical.getPortNumber()));
     }
 
     @Test
     public void offlineDuringRemoving() {
         NetworkBfdLogicalPortService service = makeService();
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
 
         service.portAdd(logical, physical.getPortNumber());
-        service.updateOnlineStatus(logical, true);
         service.delete(physical);
 
         final String deleteRequestId = "port-delete-request";
@@ -253,15 +258,15 @@ public class NetworkBfdLogicalPortServiceTest {
         verify(carrier).deleteLogicalPort(eq(logical));
         reset(carrier);
 
-        service.updateOnlineStatus(physical.getDatapath(), false);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), false);
         verifyNoMoreInteractions(carrier);
 
         when(carrier.deleteLogicalPort(eq(logical))).thenReturn(deleteRequestId);
-        service.updateOnlineStatus(physical.getDatapath(), true);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
         verify(carrier).deleteLogicalPort(eq(logical));
         reset(carrier);
 
-        service.updateOnlineStatus(physical.getDatapath(), false);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), false);
 
         // recreate path
         service.apply(physical, reference, propertiesEnabled);
@@ -269,14 +274,14 @@ public class NetworkBfdLogicalPortServiceTest {
 
         final String createRequestId = "port-create-request";
         when(carrier.createLogicalPort(eq(logical), eq(physical.getPortNumber()))).thenReturn(createRequestId);
-        service.updateOnlineStatus(physical.getDatapath(), true);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
         verify(carrier).createLogicalPort(eq(logical), eq(physical.getPortNumber()));
     }
 
     @Test
     public void portRecreateRaceConditionHandling() {
         NetworkBfdLogicalPortService service = makeService();
-        service.updateOnlineStatus(physical.getDatapath(), true);
+        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
 
         service.portAdd(logical, physical.getPortNumber());
         verify(carrier).logicalPortControllerAddNotification(eq(physical));
@@ -299,11 +304,10 @@ public class NetworkBfdLogicalPortServiceTest {
         reset(carrier);
 
         service.portAdd(logical, physical.getPortNumber());
-        service.updateOnlineStatus(logical, true);
         verify(carrier).createSession(eq(logical), eq(physical.getPortNumber()));
     }
 
     private NetworkBfdLogicalPortService makeService() {
-        return new NetworkBfdLogicalPortService(carrier, LOGICAL_PORT_OFFSET);
+        return new NetworkBfdLogicalPortService(carrier, switchOnlineStatusMonitor, LOGICAL_PORT_OFFSET);
     }
 }

@@ -13,21 +13,22 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.network.storm.bolt.bfd.hub.command;
+package org.openkilda.wfm.topology.network.utils;
 
 import org.openkilda.wfm.share.model.Endpoint;
-import org.openkilda.wfm.topology.network.storm.bolt.bfd.hub.BfdHub;
+import org.openkilda.wfm.topology.network.model.LinkStatus;
 
-public class BfdHubPortOnlineStatusUpdateCommand extends BfdHubPortCommand {
-    private final boolean isOnline;
+public class EndpointStatusMonitor
+        extends BaseMonitor<Endpoint, EndpointStatusListener, LinkStatus, EndpointStatusMonitorEntry> {
+    private final static EndpointStatusMonitorEntry dummy = new EndpointStatusMonitorEntry();
 
-    public BfdHubPortOnlineStatusUpdateCommand(Endpoint endpoint, boolean isOnline) {
-        super(endpoint);
-        this.isOnline = isOnline;
+    @Override
+    protected EndpointStatusMonitorEntry makeEntry(Endpoint reference) {
+        return new EndpointStatusMonitorEntry();
     }
 
     @Override
-    public void apply(BfdHub handler) {
-        handler.processOnlineStatusUpdate(getEndpoint(), isOnline);
+    protected EndpointStatusMonitorEntry getDummyEntry() {
+        return dummy;
     }
 }
