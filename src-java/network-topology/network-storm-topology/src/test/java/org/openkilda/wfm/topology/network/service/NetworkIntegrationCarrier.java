@@ -35,6 +35,7 @@ import org.openkilda.wfm.topology.network.model.LinkStatus;
 import org.openkilda.wfm.topology.network.model.NetworkOptions;
 import org.openkilda.wfm.topology.network.model.OnlineStatus;
 import org.openkilda.wfm.topology.network.model.RoundTripStatus;
+import org.openkilda.wfm.topology.network.utils.EndpointStatusMonitor;
 import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 
 import lombok.Data;
@@ -67,13 +68,15 @@ public class NetworkIntegrationCarrier
     private IBfdSessionCarrier bfdSessionCarrier = this;
     private IBfdGlobalToggleCarrier bfdGlobalToggleCarrier = this;
 
+    private final SwitchOnlineStatusMonitor switchOnlineStatusMonitor = new SwitchOnlineStatusMonitor();
+    private final EndpointStatusMonitor endpointStatusMonitor = new EndpointStatusMonitor();
+
     public NetworkIntegrationCarrier(NetworkOptions options, PersistenceManager persistenceManager) {
         switchService = new NetworkSwitchService(this, persistenceManager, options);
         portService = new NetworkPortService(this, persistenceManager);
         uniIslService = new NetworkUniIslService(this);
         islService = new NetworkIslService(this, persistenceManager, options);
 
-        SwitchOnlineStatusMonitor switchOnlineStatusMonitor = new SwitchOnlineStatusMonitor();
         bfdLogicalPortService = new NetworkBfdLogicalPortService(
                 this, switchOnlineStatusMonitor, options.getBfdLogicalPortOffset());
         bfdSessionService = new NetworkBfdSessionService(this, persistenceManager);
@@ -285,6 +288,12 @@ public class NetworkIntegrationCarrier
     @Override
     public void sendSwitchStateChanged(SwitchId switchId, SwitchStatus status) {
 
+    }
+
+    @Override
+    public void switchRemovedNotification(SwitchId switchId) {
+        switchOnlineStatusMonitor.cleanup(switchId);
+        endpointStatusMonitor.cleanup(switchId);
     }
 
     @Override

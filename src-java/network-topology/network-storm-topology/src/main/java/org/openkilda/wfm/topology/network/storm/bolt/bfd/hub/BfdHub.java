@@ -54,6 +54,7 @@ import org.openkilda.wfm.topology.network.storm.bolt.speaker.bcast.SpeakerBcast;
 import org.openkilda.wfm.topology.network.storm.bolt.sw.SwitchHandler;
 import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslBfdStatusUpdateCommand;
 import org.openkilda.wfm.topology.network.storm.bolt.uniisl.command.UniIslCommand;
+import org.openkilda.wfm.topology.network.utils.EndpointStatusMonitor;
 import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 import org.openkilda.wfm.topology.utils.MessageKafkaTranslator;
 
@@ -83,6 +84,7 @@ public class BfdHub extends AbstractBolt
     private final PersistenceManager persistenceManager;
 
     private transient SwitchOnlineStatusMonitor switchOnlineStatusMonitor;
+    private transient EndpointStatusMonitor endpointStatusMonitor = new EndpointStatusMonitor();
 
     private transient NetworkBfdLogicalPortService logicalPortService;
     private transient NetworkBfdSessionService sessionService;
@@ -314,6 +316,11 @@ public class BfdHub extends AbstractBolt
 
     public void processSessionRequestTimeout(String key, Endpoint endpoint) {
         sessionService.speakerTimeout(key, endpoint);
+    }
+
+    public void processSwitchRemovedNotification(SwitchId switchId) {
+        switchOnlineStatusMonitor.cleanup(switchId);
+        endpointStatusMonitor.cleanup(switchId);
     }
 
     @Override

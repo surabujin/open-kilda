@@ -42,4 +42,6 @@ public interface ISwitchCarrier {
     void sendAffectedFlowRerouteRequest(SwitchId switchId);
 
     void sendSwitchStateChanged(SwitchId switchId, SwitchStatus status);
+
+    void switchRemovedNotification(SwitchId switchId);
 }

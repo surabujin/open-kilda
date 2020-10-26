@@ -39,7 +39,7 @@ abstract class BaseMonitorEntry<L, S> {
 
     boolean unsubscribe(L listener) {
         subscribers.remove(listener);
-        return subscribers.isEmpty();
+        return isEmpty();
     }
 
     void update(@NonNull S change) {
@@ -51,6 +51,10 @@ abstract class BaseMonitorEntry<L, S> {
         for (L entry : subscribers) {
             propagate(entry, change);
         }
+    }
+
+    boolean isEmpty() {
+        return subscribers.isEmpty();
     }
 
     abstract void propagate(L listener, S change);

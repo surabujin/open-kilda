@@ -159,15 +159,11 @@ public class NetworkBfdLogicalPortServiceTest {
 
         service.portAdd(logical, physical.getPortNumber());
         verify(carrier).logicalPortControllerAddNotification(eq(physical));
-        verify(carrier).createSession(eq(logical), eq(physical.getPortNumber()));
         verifyNoMoreInteractions(carrier);
         reset(carrier);
 
-        service.apply(physical, reference, propertiesDisabled);
-        verify(carrier).disableSession(eq(physical));
-        verifyNoMoreInteractions(carrier);
-
         service.apply(physical, reference, propertiesEnabled);
+        verify(carrier).createSession(eq(logical), eq(physical.getPortNumber()));
         verify(carrier).enableUpdateSession(eq(physical), eq(reference), eq(propertiesEnabled));
         reset(carrier);
 

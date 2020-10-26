@@ -16,9 +16,16 @@
 
 package org.openkilda.wfm.topology.network.utils;
 
+import org.openkilda.model.SwitchId;
+
 class SwitchOnlineStatusMonitorEntry extends BaseMonitorEntry<SwitchOnlineStatusListener, Boolean> {
     public SwitchOnlineStatusMonitorEntry() {
         super(false);
+    }
+
+    @Override
+    boolean isEmpty() {
+        return super.isEmpty() && !status;
     }
 
     @Override

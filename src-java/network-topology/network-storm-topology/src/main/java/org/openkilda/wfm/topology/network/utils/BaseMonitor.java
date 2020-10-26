@@ -19,7 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public abstract class BaseMonitor<R, L, S, E extends BaseMonitorEntry<L, S>> {
-    private final Map<R, E> monitors = new HashMap<>();
+    protected final Map<R, E> monitors = new HashMap<>();
 
     public void subscribe(R switchId, L listener) {
         monitors.computeIfAbsent(switchId, this::makeEntry)
@@ -38,9 +38,10 @@ public abstract class BaseMonitor<R, L, S, E extends BaseMonitorEntry<L, S>> {
     }
 
     public void update(R reference, S change) {
-        E entry = monitors.get(reference);
-        if (entry != null) {
-            entry.update(change);
+        E entry = monitors.computeIfAbsent(reference, this::makeEntry);
+        entry.update(change);
+        if (entry.isEmpty()) {
+            monitors.remove(reference);
         }
     }
 

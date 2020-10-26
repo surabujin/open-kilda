@@ -303,12 +303,12 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
             // READY
             builder.transition()
-                    .from(State.READY).to(State.OPERATIONAL).on(Event.ONLINE);
-            builder.transition()
-                    .from(State.READY).to(State.WAIT_STATUS).on(Event.ENABLE_UPDATE)
+                    .from(State.READY).to(State.OPERATIONAL).on(Event.ENABLE_UPDATE)
                     .callMethod(saveSessionDataAction);
             builder.transition()
                     .from(State.READY).to(State.REMOVING).on(Event.DELETE);
+            builder.transition()
+                    .from(State.READY).to(State.REMOVING).on(Event.DISABLE);
             builder.transition()
                     .from(State.READY).to(State.STOP).on(Event.PORT_DEL);
             builder.onEntry(State.READY)
@@ -316,7 +316,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
             // CREATING
             builder.transition()
-                    .from(State.CREATING).to(State.WAIT_STATUS).on(Event.PORT_ADD);
+                    .from(State.CREATING).to(State.OPERATIONAL).on(Event.PORT_ADD);
             builder.transition()
                     .from(State.CREATING).to(State.REMOVING).on(Event.DISABLE);
             builder.transition()
@@ -341,22 +341,11 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
             builder.onExit(State.CREATING)
                     .callMethod("creatingExitAction");
 
-            // WAIT_STATUS
-            builder.transition()
-                    .from(State.WAIT_STATUS).to(State.CREATING).on(Event.PORT_DEL);
-            builder.transition()
-                    .from(State.WAIT_STATUS).to(State.OPERATIONAL).on(Event.ONLINE);
-            builder.transition()
-                    .from(State.WAIT_STATUS).to(State.READY).on(Event.DISABLE);
-            builder.transition()
-                    .from(State.WAIT_STATUS).to(State.REMOVING).on(Event.DELETE);
-            builder.internalTransition()
-                    .within(State.WAIT_STATUS).on(Event.ENABLE_UPDATE)
-                    .callMethod(saveSessionDataAction);
-
             // OPERATIONAL
             builder.transition()
                     .from(State.OPERATIONAL).to(State.REMOVING).on(Event.SESSION_DEL);
+            builder.transition()
+                    .from(State.OPERATIONAL).to(State.HOUSEKEEPING).on(Event.PORT_DEL);
             builder.onEntry(State.OPERATIONAL)
                     .callMethod("operationalEnterAction");
             builder.internalTransition()
@@ -367,9 +356,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
                     .callMethod(sendSessionDisableAction);
             builder.internalTransition()
                     .within(State.OPERATIONAL).on(Event.DELETE)
-                    .callMethod(sendSessionDeleteAction);
-            builder.internalTransition()
-                    .within(State.OPERATIONAL).on(Event.PORT_DEL)
                     .callMethod(sendSessionDeleteAction);
             builder.internalTransition()
                     .within(State.OPERATIONAL).on(Event.OFFLINE)
@@ -391,6 +377,28 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
             builder.internalTransition()
                     .within(State.REMOVING).on(Event.PORT_ADD)
                     .callMethod(sendPortDeleteAction);
+
+            // HOUSEKEEPING
+            builder.transition()
+                    .from(State.HOUSEKEEPING).to(State.OPERATIONAL).on(Event.PORT_ADD);
+            builder.transition()
+                    .from(State.HOUSEKEEPING).to(State.STOP).on(Event.SESSION_DEL);
+            builder.transition()
+                    .from(State.HOUSEKEEPING).to(State.PREPARE).on(Event.ENABLE_UPDATE);
+            builder.transition()
+                    .from(State.HOUSEKEEPING).to(State.DEBRIS).on(Event.DISABLE);
+            builder.transition()
+                    .from(State.HOUSEKEEPING).to(State.DEBRIS).on(Event.DELETE);
+            builder.onEntry(State.HOUSEKEEPING)
+                    .callMethod(sendSessionDeleteAction);
+
+            // DEBRIS
+            builder.transition()
+                    .from(State.DEBRIS).to(State.STOP).on(Event.SESSION_DEL);
+            builder.transition()
+                    .from(State.DEBRIS).to(State.REMOVING).on(Event.PORT_ADD);
+            builder.transition()
+                    .from(State.DEBRIS).to(State.PREPARE).on(Event.ENABLE_UPDATE);
 
             // STOP
             builder.defineFinalState(State.STOP);
@@ -426,9 +434,10 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         PREPARE,
         READY,
         CREATING,
-        WAIT_STATUS,
         OPERATIONAL,
         REMOVING,
+        HOUSEKEEPING,
+        DEBRIS,
         STOP
     }
 

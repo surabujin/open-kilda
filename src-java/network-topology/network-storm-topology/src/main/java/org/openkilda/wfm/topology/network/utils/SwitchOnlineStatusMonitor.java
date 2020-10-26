@@ -25,6 +25,10 @@ public class SwitchOnlineStatusMonitor
         extends BaseMonitor<SwitchId, SwitchOnlineStatusListener, Boolean, SwitchOnlineStatusMonitorEntry> {
     private final static SwitchOnlineStatusMonitorEntry dummy = new SwitchOnlineStatusMonitorEntry();
 
+    public void cleanup(SwitchId reference) {
+        monitors.remove(reference);
+    }
+
     @Override
     protected SwitchOnlineStatusMonitorEntry makeEntry(SwitchId reference) {
         return new SwitchOnlineStatusMonitorEntry();

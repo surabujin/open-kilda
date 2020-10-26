@@ -1,4 +1,5 @@
-/* Copyright 2020 Telstra Open Source
+/*
+ * Copyright 2020 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -13,22 +14,18 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.network.utils;
+package org.openkilda.wfm.topology.network.storm.bolt.bfd.hub.command;
 
-import org.openkilda.wfm.topology.network.model.LinkStatus;
+import org.openkilda.model.SwitchId;
+import org.openkilda.wfm.topology.network.storm.bolt.bfd.hub.BfdHub;
 
-public class EndpointStatusMonitorEntry extends BaseMonitorEntry<EndpointStatusListener, LinkStatus> {
-    public EndpointStatusMonitorEntry() {
-        super(LinkStatus.DOWN);
+public class BfdHubSwitchRemovedNotificationCommand extends BfdHubSwitchCommand {
+    public BfdHubSwitchRemovedNotificationCommand(SwitchId switchId) {
+        super(switchId);
     }
 
     @Override
-    boolean isEmpty() {
-        return super.isEmpty() && status == LinkStatus.DOWN;
-    }
-
-    @Override
-    void propagate(EndpointStatusListener listener, LinkStatus change) {
-        listener.endpointStatusUpdate(change);
+    public void apply(BfdHub handler) {
+        handler.processSwitchRemovedNotification(getSwitchId());
     }
 }

@@ -42,8 +42,6 @@ public class NetworkSwitchService {
     private final Map<SwitchId, SwitchFsm> controller = new HashMap<>();
     private final FsmExecutor<SwitchFsm, SwitchFsmState, SwitchFsmEvent, SwitchFsmContext> controllerExecutor;
 
-    private static final NetworkTopologyDashboardLogger logWrapper = new NetworkTopologyDashboardLogger(log);
-
     private final PersistenceManager persistenceManager;
 
     private final NetworkOptions options;
@@ -216,7 +214,6 @@ public class NetworkSwitchService {
         if (fsm.isTerminated()) {
             controller.remove(datapath);
             log.debug("Switch service removed FSM {}", datapath);
-            logWrapper.onSwitchDelete(datapath);
         } else {
             log.error("Switch service remove failed for FSM {}, state: {}", datapath, fsm.getCurrentState());
         }
@@ -234,9 +231,6 @@ public class NetworkSwitchService {
 
     private SwitchFsm locateControllerCreateIfAbsent(SwitchId datapath) {
         return controller.computeIfAbsent(
-                datapath, key -> {
-                    logWrapper.onSwitchAdd(key);
-                    return controllerFactory.produce(persistenceManager, datapath, options);
-                });
+                datapath, key -> controllerFactory.produce(persistenceManager, datapath, options));
     }
 }

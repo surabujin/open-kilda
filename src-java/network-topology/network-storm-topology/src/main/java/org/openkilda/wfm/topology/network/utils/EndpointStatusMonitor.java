@@ -15,12 +15,17 @@
 
 package org.openkilda.wfm.topology.network.utils;
 
+import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.topology.network.model.LinkStatus;
 
 public class EndpointStatusMonitor
         extends BaseMonitor<Endpoint, EndpointStatusListener, LinkStatus, EndpointStatusMonitorEntry> {
     private final static EndpointStatusMonitorEntry dummy = new EndpointStatusMonitorEntry();
+
+    public void cleanup(SwitchId switchId) {
+        monitors.keySet().removeIf(key -> switchId.equals(key.getDatapath()));
+    }
 
     @Override
     protected EndpointStatusMonitorEntry makeEntry(Endpoint reference) {
