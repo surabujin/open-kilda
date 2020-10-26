@@ -1,9 +1,11 @@
 Internal data
 * ISL reference
 * BFD descriptor
-* port status monitor
+* switch online status listener
+* port status listener
 * BFD properties
 * action
+* tear down flag
 
 Internal signals
 * action-success
@@ -68,6 +70,7 @@ ACTIVE : offline / emit bfd-kill
 ACTIVE : offline / clean port status transitions
 ACTIVE : exit / emit bfd-kill
 
+REMOVING : enter / set tear down flag
 REMOVING : enter / [isOnline] make BFD-remove action
 REMOVING --> HOUSEKEEPING : action-success
 REMOVING : online / make BFD-remove action
