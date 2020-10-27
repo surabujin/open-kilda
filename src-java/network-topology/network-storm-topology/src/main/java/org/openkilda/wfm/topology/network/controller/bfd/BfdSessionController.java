@@ -13,19 +13,16 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.network.service;
+package org.openkilda.wfm.topology.network.controller.bfd;
 
 import org.openkilda.model.BfdProperties;
-import org.openkilda.wfm.share.model.Endpoint;
-import org.openkilda.wfm.share.model.IslReference;
 
-public interface IBfdLogicalPortCarrier {
-    String createLogicalPort(Endpoint logical, int physicalPortNumber);
+public class BfdSessionController {
+    private BfdSessionFsm fsm;
 
-    String deleteLogicalPort(Endpoint logical);
+    private BfdProperties goal;
 
-    void createSession(Endpoint logical, int physicalPortNumber);
-
+    /*
     void enableUpdateSession(Endpoint physical, IslReference reference, BfdProperties properties);
 
     void disableSession(Endpoint physical);
@@ -37,4 +34,5 @@ public interface IBfdLogicalPortCarrier {
     void logicalPortControllerAddNotification(Endpoint physical);
 
     void logicalPortControllerDelNotification(Endpoint physical);
+    */
 }

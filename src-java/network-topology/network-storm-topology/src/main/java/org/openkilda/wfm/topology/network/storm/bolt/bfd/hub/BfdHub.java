@@ -176,11 +176,6 @@ public class BfdHub extends AbstractBolt
     }
 
     @Override
-    public void deleteSession(Endpoint logical) {
-        sessionService.delete(logical);
-    }
-
-    @Override
     public void updateSessionOnlineStatus(Endpoint logical, boolean isOnline) {
         sessionService.updateOnlineStatus(logical, isOnline);
     }
@@ -283,9 +278,9 @@ public class BfdHub extends AbstractBolt
         logicalPortService.disable(endpoint);
     }
 
-    public void processDelete(Endpoint physical, IslReference reference) {
+    public void processIslRemoveNotification(Endpoint physical, IslReference reference) {
         // reference argument will be used for "delete protection" to filter out stale delete requests
-        logicalPortService.delete(physical);
+        logicalPortService.disableIfExists(physical);
     }
 
     public void processLinkStatusUpdate(Endpoint logical, LinkStatus status) {

@@ -166,11 +166,6 @@ public class NetworkIntegrationCarrier
     }
 
     @Override
-    public void deleteSession(Endpoint logical) {
-        bfdSessionService.delete(logical);
-    }
-
-    @Override
     public void updateSessionOnlineStatus(Endpoint logical, boolean isOnline) {
         bfdSessionService.updateOnlineStatus(logical, isOnline);
     }

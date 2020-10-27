@@ -169,10 +169,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         sendSessionDisableRequest();
     }
 
-    public void sendSessionDeleteAction(State from, State to, Event event, BfdLogicalPortFsmContext context) {
-        sendSessionRemoveRequest();
-    }
-
     public void sendSessionFailureAction(State from, State to, Event event, BfdLogicalPortFsmContext context) {
         sendSessionFailNotification();
     }
@@ -229,10 +225,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         carrier.disableSession(physicalEndpoint);
     }
 
-    private void sendSessionRemoveRequest() {
-        carrier.deleteSession(getLogicalEndpoint());
-    }
-
     private void updateSessionOnlineStatus(boolean isOnline) {
         carrier.updateSessionOnlineStatus(getLogicalEndpoint(), isOnline);
     }
@@ -282,7 +274,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
             final String sendSessionDisableAction = "sendSessionDisableAction";
             final String sendSessionEnableUpdateAction = "sendSessionEnableUpdateAction";
-            final String sendSessionDeleteAction = "sendSessionDeleteAction";
             final String sendSessionOfflineAction = "sendSessionOfflineAction";
             final String sendSessionOnlineAction = "sendSessionOnlineAction";
             final String sendPortCreateAction = "sendPortCreateAction";
@@ -306,8 +297,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
                     .from(State.READY).to(State.OPERATIONAL).on(Event.ENABLE_UPDATE)
                     .callMethod(saveSessionDataAction);
             builder.transition()
-                    .from(State.READY).to(State.REMOVING).on(Event.DELETE);
-            builder.transition()
                     .from(State.READY).to(State.REMOVING).on(Event.DISABLE);
             builder.transition()
                     .from(State.READY).to(State.STOP).on(Event.PORT_DEL);
@@ -319,8 +308,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
                     .from(State.CREATING).to(State.OPERATIONAL).on(Event.PORT_ADD);
             builder.transition()
                     .from(State.CREATING).to(State.REMOVING).on(Event.DISABLE);
-            builder.transition()
-                    .from(State.CREATING).to(State.REMOVING).on(Event.DELETE);
             builder.onEntry(State.CREATING)
                     .callMethod("creatingEnterAction");
             builder.internalTransition()
@@ -355,9 +342,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
                     .within(State.OPERATIONAL).on(Event.DISABLE)
                     .callMethod(sendSessionDisableAction);
             builder.internalTransition()
-                    .within(State.OPERATIONAL).on(Event.DELETE)
-                    .callMethod(sendSessionDeleteAction);
-            builder.internalTransition()
                     .within(State.OPERATIONAL).on(Event.OFFLINE)
                     .callMethod(sendSessionOfflineAction);
             builder.internalTransition()
@@ -387,10 +371,8 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
                     .from(State.HOUSEKEEPING).to(State.PREPARE).on(Event.ENABLE_UPDATE);
             builder.transition()
                     .from(State.HOUSEKEEPING).to(State.DEBRIS).on(Event.DISABLE);
-            builder.transition()
-                    .from(State.HOUSEKEEPING).to(State.DEBRIS).on(Event.DELETE);
             builder.onEntry(State.HOUSEKEEPING)
-                    .callMethod(sendSessionDeleteAction);
+                    .callMethod(sendSessionDisableAction);
 
             // DEBRIS
             builder.transition()
@@ -443,7 +425,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
     public enum Event {
         NEXT,
-        ENABLE_UPDATE, DISABLE, DELETE,
+        ENABLE_UPDATE, DISABLE,
         PORT_ADD, PORT_DEL,
         ONLINE, OFFLINE,
         WORKER_SUCCESS, WORKER_ERROR,

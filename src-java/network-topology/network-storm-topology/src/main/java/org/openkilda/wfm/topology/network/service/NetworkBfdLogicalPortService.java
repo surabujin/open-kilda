@@ -95,20 +95,20 @@ public class NetworkBfdLogicalPortService {
 
     public void disable(Endpoint physical) {
         logServiceCall("DISABLE physical={}", physical);
-        handle(lookupControllerByPhysicalEndpoint(physical), Event.DISABLE);
+        actualDisable(lookupControllerByPhysicalEndpoint(physical));
     }
 
     /**
-     * Handle BFD delete request.
+     * Handle BFD optional disable request (reaction on ISL remove notification).
      */
-    public void delete(Endpoint physical) {
-        logServiceCall("DELETE physical={}", physical);
+    public void disableIfExists(Endpoint physical) {
+        logServiceCall("DISABLE(if exists) physical={}", physical);
         BfdLogicalPortFsm controller = controllerByPhysicalEndpoint.get(physical);
         if (controller == null) {
             log.info("There is no BFD logical port controller on {} - ignore remove request", physical);
             return;
         }
-        handle(controller, Event.DELETE);
+        actualDisable(controller);
     }
 
     /**
@@ -130,6 +130,10 @@ public class NetworkBfdLogicalPortService {
     }
 
     // -- private methods --
+
+    private void actualDisable(BfdLogicalPortFsm controller) {
+        handle(controller, Event.DISABLE);
+    }
 
     private void handle(BfdLogicalPortFsm controller, Event event) {
         handle(controller, event, BfdLogicalPortFsmContext.EMPTY);

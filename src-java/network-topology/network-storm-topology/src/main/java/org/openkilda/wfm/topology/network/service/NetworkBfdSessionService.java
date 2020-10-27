@@ -65,6 +65,7 @@ public class NetworkBfdSessionService {
         controllerByPhysicalPort.put(controller.getPhysicalEndpoint(), controller);
     }
 
+    // TODO: 2del
     /**
      * Deletes BFD session.
      */

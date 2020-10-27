@@ -128,12 +128,6 @@ public class NetworkBfdLogicalPortServiceTest {
         verifyNoMoreInteractions(carrier);
         reset(carrier);
 
-        // proxy
-        service.delete(physical);
-        verify(carrier).deleteSession(eq(logical));
-        verifyNoMoreInteractions(carrier);
-        reset(carrier);
-
         // delete when session is over
         final String deleteRequestId = "port-delete-request";
         when(carrier.deleteLogicalPort(eq(logical))).thenReturn(deleteRequestId);
@@ -204,7 +198,7 @@ public class NetworkBfdLogicalPortServiceTest {
 
         final String deleteRequestId = "port-delete-request";
         when(carrier.deleteLogicalPort(eq(logical))).thenReturn(deleteRequestId);
-        service.delete(physical);
+        service.disable(physical);
         service.sessionDeleted(physical);
         verify(carrier).deleteLogicalPort(eq(logical));
         reset(carrier);
@@ -246,7 +240,7 @@ public class NetworkBfdLogicalPortServiceTest {
         switchOnlineStatusMonitor.update(physical.getDatapath(), true);
 
         service.portAdd(logical, physical.getPortNumber());
-        service.delete(physical);
+        service.disable(physical);
 
         final String deleteRequestId = "port-delete-request";
         when(carrier.deleteLogicalPort(eq(logical))).thenReturn(deleteRequestId);
@@ -285,7 +279,7 @@ public class NetworkBfdLogicalPortServiceTest {
 
         final String deleteRequestId = "port-delete-request";
         when(carrier.deleteLogicalPort(eq(logical))).thenReturn(deleteRequestId);
-        service.delete(physical);
+        service.disable(physical);
         verify(carrier).deleteLogicalPort(eq(logical));
         reset(carrier);
 

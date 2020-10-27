@@ -6,7 +6,6 @@ Input signals
 * port-del
 * enable_update (ISL-FSM)
 * disable (ISL-FSM)
-* delete
 * session-del
 * online
 * offline
@@ -31,12 +30,12 @@ PREPARE: enter / clean active requests
 PREPARE: enter / save session data
 
 READY --> OPERATIONAL : enable_update / save session data
-READY -> REMOVING : delete\ndisable
+READY -> REMOVING : disable
 READY --> [*] : port-del
 READY : enter / clear session data
 
 CREATING --> OPERATIONAL : port-add
-CREATING --> REMOVING : disable\ndelete
+CREATING --> REMOVING : disable
 CREATING: enter / [isOnline] send port create request
 CREATING: online / send port create request
 CREATING: port-del / send port create request
@@ -53,7 +52,6 @@ OPERATIONAL: enter / send session create
 OPERATIONAL: enter [have session data] / send session enable_update
 OPERATIONAL: enable_update / send session enable_update
 OPERATIONAL: disable / send session disable
-OPERATIONAL: delete / send session delete
 OPERATIONAL: offline / send session offline
 OPERATIONAL: online / send session online
 
@@ -66,8 +64,8 @@ REMOVING: port-add / send port delete request
 HOUSEKEEPING --> OPERATIONAL : port-add
 HOUSEKEEPING --> [*] : session-del
 HOUSEKEEPING --> PREPARE : enable_update
-HOUSEKEEPING --> DEBRIS : disable\ndelete
-HOUSEKEEPING : enter / send session delete
+HOUSEKEEPING --> DEBRIS : disable
+HOUSEKEEPING : enter / send session disable
 
 DEBRIS --> [*] : session-del
 DEBRIS --> REMOVING : port-add
