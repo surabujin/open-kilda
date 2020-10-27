@@ -21,7 +21,7 @@ import org.openkilda.wfm.topology.network.service.IBfdSessionCarrier;
 
 class BfdSessionSetupAction extends BfdSessionAction {
     BfdSessionSetupAction(IBfdSessionCarrier carrier, NoviBfdSession requestPayload) {
-        super(carrier.addBfdSession(requestPayload));
+        super(carrier.sendWorkerBfdSessionCreateRequest(requestPayload));
     }
 
     @Override

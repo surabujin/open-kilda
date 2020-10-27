@@ -129,7 +129,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
     }
 
     public void operationalEnterAction(State from, State to, Event event, BfdLogicalPortFsmContext context) {
-        carrier.createSession(getLogicalEndpoint(), physicalEndpoint.getPortNumber());
         if (sessionData != null) {
             sendSessionEnableUpdateRequest();
         }
@@ -218,11 +217,11 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
     }
 
     private void sendSessionEnableUpdateRequest(BfdSessionData data) {
-        carrier.enableUpdateSession(physicalEndpoint, data.getReference(), data.getProperties());
+        carrier.enableUpdateSession(getLogicalEndpoint(), physicalEndpoint.getPortNumber(), data);
     }
 
     private void sendSessionDisableRequest() {
-        carrier.disableSession(physicalEndpoint);
+        carrier.disableSession(getLogicalEndpoint());
     }
 
     private void updateSessionOnlineStatus(boolean isOnline) {
@@ -330,7 +329,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
             // OPERATIONAL
             builder.transition()
-                    .from(State.OPERATIONAL).to(State.REMOVING).on(Event.SESSION_DEL);
+                    .from(State.OPERATIONAL).to(State.REMOVING).on(Event.SESSION_COMPLETED);
             builder.transition()
                     .from(State.OPERATIONAL).to(State.HOUSEKEEPING).on(Event.PORT_DEL);
             builder.onEntry(State.OPERATIONAL)
@@ -366,7 +365,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
             builder.transition()
                     .from(State.HOUSEKEEPING).to(State.OPERATIONAL).on(Event.PORT_ADD);
             builder.transition()
-                    .from(State.HOUSEKEEPING).to(State.STOP).on(Event.SESSION_DEL);
+                    .from(State.HOUSEKEEPING).to(State.STOP).on(Event.SESSION_COMPLETED);
             builder.transition()
                     .from(State.HOUSEKEEPING).to(State.PREPARE).on(Event.ENABLE_UPDATE);
             builder.transition()
@@ -376,7 +375,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
             // DEBRIS
             builder.transition()
-                    .from(State.DEBRIS).to(State.STOP).on(Event.SESSION_DEL);
+                    .from(State.DEBRIS).to(State.STOP).on(Event.SESSION_COMPLETED);
             builder.transition()
                     .from(State.DEBRIS).to(State.REMOVING).on(Event.PORT_ADD);
             builder.transition()
@@ -429,6 +428,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         PORT_ADD, PORT_DEL,
         ONLINE, OFFLINE,
         WORKER_SUCCESS, WORKER_ERROR,
-        SESSION_DEL
+        SESSION_COMPLETED
     }
 }

@@ -21,6 +21,7 @@ import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.Event;
 import org.openkilda.wfm.topology.network.model.LinkStatus;
 import org.openkilda.wfm.topology.network.service.IBfdSessionCarrier;
 
+// TODO: 2del
 class PortStatusMonitor {
     private final BfdSessionFsm consumer;
 

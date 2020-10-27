@@ -131,7 +131,7 @@ public class NetworkBfdSessionServiceTest {
         }).when(transactionManager).doInTransaction(Mockito.any(TransactionCallback.class));
         when(persistenceManager.getRepositoryFactory()).thenReturn(repositoryFactory);
 
-        service = new NetworkBfdSessionService(carrier, persistenceManager);
+        service = new NetworkBfdSessionService(persistenceManager, , carrier);
     }
 
     @Test
@@ -149,15 +149,15 @@ public class NetworkBfdSessionServiceTest {
                 .when(bfdSessionRepository).add(any());
 
         // setup BFD session
-        when(carrier.addBfdSession(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
+        when(carrier.sendWorkerBfdSessionCreateRequest(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
 
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, genericBfdProperties);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, genericBfdProperties);
 
         ArgumentCaptor<NoviBfdSession> setupBfdSessionArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).addBfdSession(setupBfdSessionArgument.capture());
+        verify(carrier).sendWorkerBfdSessionCreateRequest(setupBfdSessionArgument.capture());
         NoviBfdSession setupBfdSessionPayload = setupBfdSessionArgument.getValue();
 
-        service.speakerResponse(setupRequestKey, alphaLogicalEndpoint, new BfdSessionResponse(
+        service.speakerResponse(alphaLogicalEndpoint, setupRequestKey, new BfdSessionResponse(
                 setupBfdSessionPayload, null));
         service.updateLinkStatus(alphaLogicalEndpoint, LinkStatus.UP);
 
@@ -173,7 +173,7 @@ public class NetworkBfdSessionServiceTest {
         Assert.assertNotNull(bfdSessionDb.getDiscriminator());
 
         ArgumentCaptor<NoviBfdSession> bfdSessionCreateSpeakerArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).addBfdSession(bfdSessionCreateSpeakerArgument.capture());
+        verify(carrier).sendWorkerBfdSessionCreateRequest(bfdSessionCreateSpeakerArgument.capture());
 
         NoviBfdSession speakerBfdSetup = bfdSessionCreateSpeakerArgument.getValue();
         Assert.assertEquals(alphaEndpoint.getDatapath(), speakerBfdSetup.getTarget().getDatapath());
@@ -194,14 +194,14 @@ public class NetworkBfdSessionServiceTest {
         reset(bfdSessionRepository);
 
         // remove BFD session
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
 
         service.disable(alphaEndpoint);
 
         verify(carrier).bfdKillNotification(alphaEndpoint);
 
         ArgumentCaptor<NoviBfdSession> bfdSessionRemoveSpeakerArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).deleteBfdSession(bfdSessionRemoveSpeakerArgument.capture());
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(bfdSessionRemoveSpeakerArgument.capture());
 
         NoviBfdSession speakerBfdRemove = bfdSessionRemoveSpeakerArgument.getValue();
         Assert.assertEquals(speakerBfdSetup, speakerBfdRemove);
@@ -218,7 +218,7 @@ public class NetworkBfdSessionServiceTest {
                 .thenReturn(Optional.of(bfdSessionDb));
 
         BfdSessionResponse speakerResponse = new BfdSessionResponse(speakerBfdRemove, null);
-        service.speakerResponse(removeRequestKey, alphaLogicalEndpoint, speakerResponse);
+        service.speakerResponse(alphaLogicalEndpoint, removeRequestKey, speakerResponse);
         service.updateLinkStatus(alphaLogicalEndpoint, LinkStatus.DOWN);
 
         verify(bfdSessionRepository).findBySwitchIdAndPort(alphaLogicalEndpoint.getDatapath(),
@@ -239,7 +239,7 @@ public class NetworkBfdSessionServiceTest {
         mockBfdSessionLookup(initialBfdSession);
         BfdSessionResponse removeResponse = new BfdSessionResponse(
                 removeRequestPayload, NoviBfdSession.Errors.NOVI_BFD_DISCRIMINATOR_NOT_FOUND_ERROR);
-        service.speakerResponse(removeRequestKey, alphaLogicalEndpoint, removeResponse);
+        service.speakerResponse(alphaLogicalEndpoint, removeRequestKey, removeResponse);
 
         verify(bfdSessionRepository).findBySwitchIdAndPort(alphaLogicalEndpoint.getDatapath(),
                                                            alphaLogicalEndpoint.getPortNumber());
@@ -262,9 +262,9 @@ public class NetworkBfdSessionServiceTest {
         mockSwitchLookup(alphaSwitch);
         mockSwitchLookup(betaSwitch);
 
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, genericBfdProperties);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, genericBfdProperties);
 
-        verify(carrier).addBfdSession(any(NoviBfdSession.class));
+        verify(carrier).sendWorkerBfdSessionCreateRequest(any(NoviBfdSession.class));
     }
 
     @Test
@@ -276,7 +276,7 @@ public class NetworkBfdSessionServiceTest {
         mockBfdSessionLookup(initialBfdSession);
         BfdSessionResponse removeResponse = new BfdSessionResponse(
                 removeRequestPayload, NoviBfdSession.Errors.SWITCH_RESPONSE_ERROR);
-        service.speakerResponse(removeRequestKey, alphaLogicalEndpoint, removeResponse);
+        service.speakerResponse(alphaLogicalEndpoint, removeRequestKey, removeResponse);
 
         verify(carrier).bfdFailNotification(alphaEndpoint);
 
@@ -287,8 +287,8 @@ public class NetworkBfdSessionServiceTest {
         reset(bfdSessionRepository);
 
         // make one more remove attempt on next enable/update request
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, genericBfdProperties);
-        verify(carrier).deleteBfdSession(removeRequestPayload);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, genericBfdProperties);
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(removeRequestPayload);
         verifyNoMoreInteractions(carrier);
     }
 
@@ -402,9 +402,9 @@ public class NetworkBfdSessionServiceTest {
         mockSwitchLookup(alphaSwitch);
         mockSwitchLookup(betaSwitch);
         mockMissingBfdSession(alphaLogicalEndpoint);
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, genericBfdProperties);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, genericBfdProperties);
 
-        verify(carrier).addBfdSession(argThat(
+        verify(carrier).sendWorkerBfdSessionCreateRequest(argThat(
                 argument -> argument.getTarget().getDatapath().equals(alphaLogicalEndpoint.getDatapath())
                 && argument.getRemote().getDatapath().equals(betaEndpoint.getDatapath())));
     }
@@ -418,7 +418,7 @@ public class NetworkBfdSessionServiceTest {
         verifyNoMoreInteractions(carrier);
 
         // enable
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, genericBfdProperties);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, genericBfdProperties);
         verifyNoMoreInteractions(carrier);
 
         doAnswer(invocation -> invocation.getArgument(0))
@@ -432,7 +432,7 @@ public class NetworkBfdSessionServiceTest {
         service.updateOnlineStatus(alphaLogicalEndpoint, true);
         service.updateLinkStatus(alphaLogicalEndpoint, LinkStatus.DOWN);
 
-        verify(carrier).addBfdSession(argThat(
+        verify(carrier).sendWorkerBfdSessionCreateRequest(argThat(
                 argument -> argument.getTarget().getDatapath().equals(alphaLogicalEndpoint.getDatapath())
                 && argument.getRemote().getDatapath().equals(betaEndpoint.getDatapath())));
     }
@@ -446,7 +446,7 @@ public class NetworkBfdSessionServiceTest {
         verifyNoMoreInteractions(carrier);
 
         // enable
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, genericBfdProperties);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, genericBfdProperties);
         verifyNoMoreInteractions(carrier);
 
         // disable
@@ -466,8 +466,8 @@ public class NetworkBfdSessionServiceTest {
         mockSwitchLookup(gammaSwitch);
         mockMissingBfdSession(alphaLogicalEndpoint);
 
-        service.enableUpdate(alphaEndpoint, new IslReference(alphaEndpoint, gammaEndpoint), genericBfdProperties);
-        verify(carrier).addBfdSession(argThat(
+        service.enableUpdate(alphaEndpoint, , new IslReference(alphaEndpoint, gammaEndpoint), genericBfdProperties);
+        verify(carrier).sendWorkerBfdSessionCreateRequest(argThat(
                 argument -> argument.getTarget().getDatapath().equals(alphaLogicalEndpoint.getDatapath())
                         && argument.getRemote().getDatapath().equals(gammaEndpoint.getDatapath())));
     }
@@ -483,11 +483,11 @@ public class NetworkBfdSessionServiceTest {
         mockSwitchLookup(alphaSwitch);
         mockSwitchLookup(betaSwitch);
         mockMissingBfdSession(alphaLogicalEndpoint);
-        when(carrier.addBfdSession(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, genericBfdProperties);
+        when(carrier.sendWorkerBfdSessionCreateRequest(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, genericBfdProperties);
 
         ArgumentCaptor<NoviBfdSession> setupBfdSessionArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).addBfdSession(setupBfdSessionArgument.capture());
+        verify(carrier).sendWorkerBfdSessionCreateRequest(setupBfdSessionArgument.capture());
 
         final NoviBfdSession initialSpeakerBfdSession = setupBfdSessionArgument.getValue();
 
@@ -503,12 +503,12 @@ public class NetworkBfdSessionServiceTest {
         mockSwitchLookup(alphaSwitch);
         mockSwitchLookup(betaSwitch);
         mockMissingBfdSession(alphaLogicalEndpoint);
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
 
         service.updateOnlineStatus(alphaLogicalEndpoint, true);
         service.updateLinkStatus(alphaLogicalEndpoint, LinkStatus.DOWN);
 
-        verify(carrier).deleteBfdSession(setupBfdSessionArgument.capture());
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(setupBfdSessionArgument.capture());
         final NoviBfdSession recoverySpeakerBfdSession = setupBfdSessionArgument.getValue();
 
         Assert.assertEquals(initialSpeakerBfdSession, recoverySpeakerBfdSession);
@@ -520,16 +520,16 @@ public class NetworkBfdSessionServiceTest {
         reset(bfdSessionRepository);
 
         // ignore FL response (timeout)
-        service.speakerTimeout(setupRequestKey, alphaLogicalEndpoint);
+        service.speakerTimeout(alphaLogicalEndpoint, setupRequestKey);
         verifyNoMoreInteractions(carrier);
 
         // react on valid FL response
-        when(carrier.addBfdSession(any(NoviBfdSession.class))).thenReturn(setupRequestKey + "#2");
+        when(carrier.sendWorkerBfdSessionCreateRequest(any(NoviBfdSession.class))).thenReturn(setupRequestKey + "#2");
 
         BfdSessionResponse response = new BfdSessionResponse(recoverySpeakerBfdSession, null);
-        service.speakerResponse(removeRequestKey, alphaLogicalEndpoint, response);
+        service.speakerResponse(alphaLogicalEndpoint, removeRequestKey, response);
 
-        verify(carrier).addBfdSession(argThat(
+        verify(carrier).sendWorkerBfdSessionCreateRequest(argThat(
                 argument -> argument.getTarget().getDatapath().equals(alphaLogicalEndpoint.getDatapath())
                         && argument.getRemote().getDatapath().equals(betaEndpoint.getDatapath())
                         && initialSpeakerBfdSession.getDiscriminator() == argument.getDiscriminator()));
@@ -542,12 +542,12 @@ public class NetworkBfdSessionServiceTest {
         String requestKey = "request-key-#";
 
         // disable
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(requestKey + "1");
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(requestKey + "1");
 
         service.disable(alphaEndpoint);
 
         ArgumentCaptor<NoviBfdSession> removeBfdSessionArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).deleteBfdSession(removeBfdSessionArgument.capture());
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(removeBfdSessionArgument.capture());
 
         reset(carrier);
 
@@ -557,23 +557,23 @@ public class NetworkBfdSessionServiceTest {
         reset(carrier);
 
         // online
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(requestKey + "2");
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(requestKey + "2");
 
         service.updateOnlineStatus(alphaLogicalEndpoint, true);
         service.updateLinkStatus(alphaLogicalEndpoint, LinkStatus.DOWN);
 
-        verify(carrier).deleteBfdSession(removeBfdSessionArgument.getValue());
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(removeBfdSessionArgument.getValue());
 
         verifyNoMoreInteractions(carrier);
 
         // ignore outdated timeout
-        service.speakerTimeout(requestKey + "1", alphaLogicalEndpoint);
+        service.speakerTimeout(alphaLogicalEndpoint, requestKey + "1");
         // IDLE and DO_REMOVE will ignore it, but REMOVE_FAIL will react
         service.updateLinkStatus(alphaLogicalEndpoint, LinkStatus.DOWN);
         verifyNoMoreInteractions(carrier);
 
-        service.speakerResponse(requestKey + "2", alphaLogicalEndpoint,
-                                new BfdSessionResponse(removeBfdSessionArgument.getValue(),
+        service.speakerResponse(alphaLogicalEndpoint, requestKey + "2",
+                new BfdSessionResponse(removeBfdSessionArgument.getValue(),
                                                        NoviBfdSession.Errors.NOVI_BFD_DISCRIMINATOR_NOT_FOUND_ERROR));
         verifyNoMoreInteractions(carrier);
 
@@ -597,7 +597,7 @@ public class NetworkBfdSessionServiceTest {
 
         NoviBfdSession session = doEnable();
 
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
         service.delete(alphaLogicalEndpoint);
 
         verifyTerminateSequence(session);
@@ -607,7 +607,7 @@ public class NetworkBfdSessionServiceTest {
     public void killDuringActiveUp() {
         NoviBfdSession session = setupAndEnable();
 
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
         service.delete(alphaLogicalEndpoint);
 
         verify(carrier).bfdKillNotification(alphaEndpoint);
@@ -619,11 +619,11 @@ public class NetworkBfdSessionServiceTest {
     public void killDuringCleaning() {
         NoviBfdSession session = setupAndEnable();
 
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
 
         service.disable(alphaEndpoint);
         verify(carrier).bfdKillNotification(alphaEndpoint);
-        verify(carrier).deleteBfdSession(session);
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(session);
 
         verifyNoMoreInteractions(carrier);
         reset(carrier);
@@ -639,30 +639,30 @@ public class NetworkBfdSessionServiceTest {
         setupAndEnable();
 
         // active
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
         BfdProperties update = BfdProperties.builder()
                 .interval(Duration.ofMillis(genericBfdProperties.getInterval().toMillis() + 100))
                 .multiplier((short) (genericBfdProperties.getMultiplier() + 1))
                 .build();
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, update);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, update);
 
         verify(carrier).bfdKillNotification(alphaEndpoint);
 
         ArgumentCaptor<NoviBfdSession> speakerBfdRequestArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).deleteBfdSession(speakerBfdRequestArgument.capture());
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(speakerBfdRequestArgument.capture());
         NoviBfdSession speakerBfdSession = speakerBfdRequestArgument.getValue();
 
         verifyNoMoreInteractions(carrier);
         reset(carrier);
 
         // reset
-        when(carrier.addBfdSession(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
+        when(carrier.sendWorkerBfdSessionCreateRequest(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
 
         service.updateLinkStatus(alphaLogicalEndpoint, LinkStatus.DOWN);
         BfdSessionResponse removeResponse = new BfdSessionResponse(speakerBfdSession, null);
-        service.speakerResponse(removeRequestKey, alphaLogicalEndpoint, removeResponse);
+        service.speakerResponse(alphaLogicalEndpoint, removeRequestKey, removeResponse);
 
-        verify(carrier).addBfdSession(speakerBfdRequestArgument.capture());
+        verify(carrier).sendWorkerBfdSessionCreateRequest(speakerBfdRequestArgument.capture());
         speakerBfdSession = speakerBfdRequestArgument.getValue();
 
         Assert.assertEquals(update.getInterval().toMillis(), speakerBfdSession.getIntervalMs());
@@ -685,7 +685,7 @@ public class NetworkBfdSessionServiceTest {
                 alphaLogicalEndpoint.getDatapath(), alphaLogicalEndpoint.getPortNumber()))
                 .thenReturn(Optional.of(dbView));
         BfdSessionResponse setupResponse = new BfdSessionResponse(speakerBfdSession, null);
-        service.speakerResponse(setupRequestKey, alphaLogicalEndpoint, setupResponse);
+        service.speakerResponse(alphaLogicalEndpoint, setupRequestKey, setupResponse);
         service.updateLinkStatus(alphaLogicalEndpoint, LinkStatus.UP);
         verify(carrier).bfdUpNotification(alphaEndpoint);
         verifyNoMoreInteractions(carrier);
@@ -710,11 +710,11 @@ public class NetworkBfdSessionServiceTest {
         mockSwitchLookup(alphaSwitch);
         mockSwitchLookup(betaSwitch);
         mockMissingBfdSession(alphaLogicalEndpoint);
-        when(carrier.addBfdSession(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
-        service.enableUpdate(alphaEndpoint, alphaToBetaIslRef, genericBfdProperties);
+        when(carrier.sendWorkerBfdSessionCreateRequest(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
+        service.enableUpdate(alphaEndpoint, , alphaToBetaIslRef, genericBfdProperties);
 
         ArgumentCaptor<NoviBfdSession> speakerBfdSetupRequestArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).addBfdSession(speakerBfdSetupRequestArgument.capture());
+        verify(carrier).sendWorkerBfdSessionCreateRequest(speakerBfdSetupRequestArgument.capture());
         NoviBfdSession speakerBfdSession = speakerBfdSetupRequestArgument.getValue();
 
         verify(bfdSessionRepository).add(any(BfdSession.class));
@@ -725,7 +725,7 @@ public class NetworkBfdSessionServiceTest {
 
         // speaker response
         BfdSessionResponse response = new BfdSessionResponse(speakerBfdSession, null);
-        service.speakerResponse(setupRequestKey, alphaLogicalEndpoint, response);
+        service.speakerResponse(alphaLogicalEndpoint, setupRequestKey, response);
 
         verifyNoMoreInteractions(carrier);
         reset(carrier);
@@ -747,12 +747,12 @@ public class NetworkBfdSessionServiceTest {
         mockSwitchLookup(alphaSwitch);
         mockSwitchLookup(betaSwitch);
 
-        when(carrier.deleteBfdSession(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
+        when(carrier.sendWorkerBfdSessionDeleteRequest(any(NoviBfdSession.class))).thenReturn(removeRequestKey);
 
         service.add(alphaLogicalEndpoint, alphaEndpoint.getPortNumber());
 
         ArgumentCaptor<NoviBfdSession> setupBfdSessionArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).deleteBfdSession(setupBfdSessionArgument.capture());
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(setupBfdSessionArgument.capture());
 
         reset(carrier);
         reset(bfdSessionRepository);
@@ -778,12 +778,12 @@ public class NetworkBfdSessionServiceTest {
         mockSwitchLookup(betaSwitch);
         mockMissingBfdSession(alphaLogicalEndpoint);
 
-        when(carrier.addBfdSession(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
+        when(carrier.sendWorkerBfdSessionCreateRequest(any(NoviBfdSession.class))).thenReturn(setupRequestKey);
 
-        service.enableUpdate(alphaEndpoint, new IslReference(alphaEndpoint, betaEndpoint), genericBfdProperties);
+        service.enableUpdate(alphaEndpoint, , new IslReference(alphaEndpoint, betaEndpoint), genericBfdProperties);
 
         ArgumentCaptor<NoviBfdSession> setupBfdSessionArgument = ArgumentCaptor.forClass(NoviBfdSession.class);
-        verify(carrier).addBfdSession(setupBfdSessionArgument.capture());
+        verify(carrier).sendWorkerBfdSessionCreateRequest(setupBfdSessionArgument.capture());
         verifyNoMoreInteractions(carrier);
 
         reset(carrier);
@@ -793,7 +793,7 @@ public class NetworkBfdSessionServiceTest {
 
     private void doEnableBeforeSetup(IslReference reference) {
         try {
-            service.enableUpdate(alphaEndpoint, reference, genericBfdProperties);
+            service.enableUpdate(alphaEndpoint, , reference, genericBfdProperties);
             throw new AssertionError(String.format(
                     "There is no expected BfdPortControllerNotFoundException from %s.enable(...)",
                     service.getClass().getName()));
@@ -805,7 +805,7 @@ public class NetworkBfdSessionServiceTest {
     }
 
     private void verifyTerminateSequence(NoviBfdSession expectedSession) {
-        verify(carrier).deleteBfdSession(expectedSession);
+        verify(carrier).sendWorkerBfdSessionDeleteRequest(expectedSession);
         verifyNoMoreInteractions(carrier);
         reset(carrier);
 
@@ -829,7 +829,7 @@ public class NetworkBfdSessionServiceTest {
                                 .discriminator(expectedSession.getDiscriminator())
                                 .build()));
 
-        service.speakerResponse(removeRequestKey, alphaLogicalEndpoint, new BfdSessionResponse(expectedSession, null));
+        service.speakerResponse(alphaLogicalEndpoint, removeRequestKey, new BfdSessionResponse(expectedSession, null));
         verify(bfdSessionRepository).remove(argThat(arg ->
                 arg.getDiscriminator() == expectedSession.getDiscriminator()
                         && arg.getSwitchId() == expectedSession.getTarget().getDatapath()

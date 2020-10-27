@@ -48,7 +48,6 @@ CREATING: exit / clean active requests
 
 OPERATIONAL --> REMOVING : session-del
 OPERATIONAL --> HOUSEKEEPING : port-del
-OPERATIONAL: enter / send session create
 OPERATIONAL: enter [have session data] / send session enable_update
 OPERATIONAL: enable_update / send session enable_update
 OPERATIONAL: disable / send session disable

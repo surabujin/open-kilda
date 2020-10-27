@@ -37,8 +37,11 @@ import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.Event;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.State;
 import org.openkilda.wfm.topology.network.error.SwitchReferenceLookupException;
 import org.openkilda.wfm.topology.network.model.BfdDescriptor;
+import org.openkilda.wfm.topology.network.model.BfdSessionData;
 import org.openkilda.wfm.topology.network.model.LinkStatus;
 import org.openkilda.wfm.topology.network.service.IBfdSessionCarrier;
+import org.openkilda.wfm.topology.network.utils.EndpointStatusMonitor;
+import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -54,8 +57,7 @@ import java.util.Optional;
 import java.util.Random;
 
 @Slf4j
-public final class BfdSessionFsm extends
-        AbstractBaseFsm<BfdSessionFsm, State, Event, BfdSessionFsmContext> {
+public final class BfdSessionFsm extends AbstractBaseFsm<BfdSessionFsm, State, Event, BfdSessionFsmContext> {
     static final int BFD_UDP_PORT = 3784;
 
     private final TransactionManager transactionManager;
@@ -69,16 +71,20 @@ public final class BfdSessionFsm extends
     @Getter
     private final Endpoint logicalEndpoint;
 
-    private final PortStatusMonitor portStatusMonitor;
-
+    @Getter
     private IslReference islReference;
+    @Getter
     private BfdProperties properties;
-    private BfdProperties effectiveProperties;
+
     private BfdDescriptor sessionDescriptor = null;
     private BfdSessionAction action = null;
 
-    public static BfdSessionFsmFactory factory() {
-        return new BfdSessionFsmFactory();
+    private boolean tearingDown;
+
+    public static BfdSessionFsmFactory factory(
+            PersistenceManager persistenceManager, SwitchOnlineStatusMonitor switchOnlineStatusMonitor,
+            EndpointStatusMonitor endpointStatusMonitor, IBfdSessionCarrier carrier) {
+        return new BfdSessionFsmFactory(persistenceManager, switchOnlineStatusMonitor, endpointStatusMonitor, carrier);
     }
 
     public BfdSessionFsm(PersistenceManager persistenceManager, Endpoint endpoint, Integer physicalPortNumber) {
@@ -92,40 +98,44 @@ public final class BfdSessionFsm extends
         this.physicalEndpoint = Endpoint.of(logicalEndpoint.getDatapath(), physicalPortNumber);
 
         portStatusMonitor = new PortStatusMonitor(this);
+
+        loadExistingSession();
     }
 
     // -- external API --
+
+    public boolean enableIfReady(BfdSessionData sessionData) {
+        if (tearingDown) {
+            return false;
+        }
+        if (this.properties != null && ! this.properties.equals(sessionData.getProperties())) {
+            return false;
+        }
+
+        BfdSessionFsmContext context = BfdSessionFsmContext.builder()
+                .islReference(sessionData.getReference())
+                .properties(sessionData.getProperties())
+                .build();
+        BfdSessionFsmFactory.EXECUTOR.fire(this, Event.ENABLE, context);
+        return true;
+    }
+
+    public void disableIfExists() {
+        if (sessionDescriptor != null) {
+            BfdSessionFsmContext context = BfdSessionFsmContext.builder().build();
+            BfdSessionFsmFactory.EXECUTOR.fire(this, Event.DISABLE, context);
+        }
+    }
 
     public void updateLinkStatus(IBfdSessionCarrier carrier, LinkStatus status) {
         portStatusMonitor.update(carrier, status);
     }
 
-    // FIXME(surabujin): extremely unreliable
-    public boolean isDoingCleanup() {
-        return State.DO_CLEANUP == getCurrentState();
-    }
-
     // -- FSM actions --
 
+/*
     public void consumeHistory(State from, State to, Event event, BfdSessionFsmContext context) {
-        Optional<BfdSession> session = loadBfdSession();
-        if (session.isPresent()) {
-            BfdSession dbView = session.get();
-            try {
-                sessionDescriptor = BfdDescriptor.builder()
-                        .local(makeSwitchReference(dbView.getSwitchId(), dbView.getIpAddress()))
-                        .remote(makeSwitchReference(dbView.getRemoteSwitchId(), dbView.getRemoteIpAddress()))
-                        .discriminator(dbView.getDiscriminator())
-                        .build();
-                properties = effectiveProperties = BfdProperties.builder()
-                        .interval(dbView.getInterval())
-                        .multiplier(dbView.getMultiplier())
-                        .build();
-            } catch (SwitchReferenceLookupException e) {
-                log.error("{} - unable to use stored BFD session data {} - {}",
-                        makeLogPrefix(), dbView, e.getMessage());
-            }
-        }
+        // TODO del
     }
 
     public void handleInitChoice(State from, State to, Event event, BfdSessionFsmContext context) {
@@ -230,15 +240,40 @@ public final class BfdSessionFsm extends
     }
 
     public void proxySpeakerResponseIntoAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        action.consumeSpeakerResponse(context.getRequestKey(), context.getBfdSessionResponse())
+        action.consumeSpeakerResponse(context.getRequestKey(), context.getSpeakerResponse())
                 .ifPresent(result -> handleActionResult(result, context));
     }
 
     public void reportSetupSuccess(State from, State to, Event event, BfdSessionFsmContext context) {
         logInfo("BFD session setup is successfully completed");
     }
+*/
 
     // -- private/service methods --
+
+    private void loadExistingSession() {
+        transactionManager.doInTransaction(() -> loadBfdSession().ifPresent(this::loadExistingSession));
+    }
+
+    private void loadExistingSession(BfdSession dbView) {
+        try {
+            sessionDescriptor = BfdDescriptor.builder()
+                    .local(makeSwitchReference(dbView.getSwitchId(), dbView.getIpAddress()))
+                    .remote(makeSwitchReference(dbView.getRemoteSwitchId(), dbView.getRemoteIpAddress()))
+                    .discriminator(dbView.getDiscriminator())
+                    .build();
+            properties = BfdProperties.builder()
+                    .interval(dbView.getInterval())
+                    .multiplier(dbView.getMultiplier())
+                    .build();
+        } catch (SwitchReferenceLookupException e) {
+            log.error("{} - unable to use stored BFD session data {} - {}",
+                    makeLogPrefix(), dbView, e.getMessage());
+        }
+    }
+
+/*
+
     private NoviBfdSession makeBfdSessionRecord(BfdProperties bfdProperties) {
         if (bfdProperties == null) {
             throw new IllegalArgumentException(String.format(
@@ -307,12 +342,14 @@ public final class BfdSessionFsm extends
             logError("DB session is missing, unable to save effective properties values");
         }
     }
+*/
 
     private Optional<BfdSession> loadBfdSession() {
         return bfdSessionRepository.findBySwitchIdAndPort(
                 logicalEndpoint.getDatapath(), logicalEndpoint.getPortNumber());
     }
 
+    /*
     private BfdDescriptor makeSessionDescriptor(IslReference islReference) throws SwitchReferenceLookupException {
         Endpoint remoteEndpoint = islReference.getOpposite(getPhysicalEndpoint());
         return BfdDescriptor.builder()
@@ -320,6 +357,7 @@ public final class BfdSessionFsm extends
                 .remote(makeSwitchReference(remoteEndpoint.getDatapath()))
                 .build();
     }
+*/
 
     private SwitchReference makeSwitchReference(SwitchId datapath) throws SwitchReferenceLookupException {
         Switch sw = switchRepository.findById(datapath)
@@ -345,6 +383,7 @@ public final class BfdSessionFsm extends
         return new SwitchReference(datapath, address);
     }
 
+    /*
     private void handleActionResult(BfdSessionAction.ActionResult result, BfdSessionFsmContext context) {
         Event event;
         if (result.isSuccess()) {
@@ -364,6 +403,7 @@ public final class BfdSessionFsm extends
             logError(String.format("%s with error %s", prefix, result.getErrorCode()));
         }
     }
+*/
 
     private void logInfo(String message) {
         if (log.isInfoEnabled()) {
@@ -385,9 +425,24 @@ public final class BfdSessionFsm extends
         public static final FsmExecutor<BfdSessionFsm, State, Event, BfdSessionFsmContext> EXECUTOR
                 = new FsmExecutor<>(Event.NEXT);
 
+        private final PersistenceManager persistenceManager;
+        private final SwitchOnlineStatusMonitor switchOnlineStatusMonitor;
+        private final EndpointStatusMonitor endpointStatusMonitor;
+
+        @Getter
+        private final IBfdSessionCarrier carrier;
+
         private final StateMachineBuilder<BfdSessionFsm, State, Event, BfdSessionFsmContext> builder;
 
-        BfdSessionFsmFactory() {
+        BfdSessionFsmFactory(
+                PersistenceManager persistenceManager, SwitchOnlineStatusMonitor switchOnlineStatusMonitor,
+                EndpointStatusMonitor endpointStatusMonitor, IBfdSessionCarrier carrier) {
+            this.persistenceManager = persistenceManager;
+            this.switchOnlineStatusMonitor = switchOnlineStatusMonitor;
+            this.endpointStatusMonitor = endpointStatusMonitor;
+            this.carrier = carrier;
+
+/*
             final String doReleaseResourcesMethod = "doReleaseResources";
             final String saveIslReferenceMethod = "saveIslReference";
             final String savePropertiesMethod = "savePropertiesAction";
@@ -641,10 +696,10 @@ public final class BfdSessionFsm extends
 
             // STOP
             builder.defineFinalState(State.STOP);
+*/
         }
 
-        public BfdSessionFsm produce(PersistenceManager persistenceManager, Endpoint endpoint,
-                                     Integer physicalPortNumber) {
+        public BfdSessionFsm produce(Endpoint endpoint, Integer physicalPortNumber) {
             BfdSessionFsm entity = builder.newStateMachine(
                     State.INIT, persistenceManager, endpoint, physicalPortNumber);
             // FIXME - DEBUG!
@@ -657,28 +712,21 @@ public final class BfdSessionFsm extends
     @Value
     @Builder
     public static class BfdSessionFsmContext {
-        private final IBfdSessionCarrier output;
-
         private IslReference islReference;
         private BfdProperties properties;
 
         private String requestKey;
-        private BfdSessionResponse bfdSessionResponse;
-
-        /**
-         * Builder.
-         */
-        public static BfdSessionFsmContextBuilder builder(IBfdSessionCarrier carrier) {
-            return (new BfdSessionFsmContextBuilder())
-                    .output(carrier);
+        private BfdSessionResponse speakerResponse;
         }
-    }
 
     public enum Event {
-        NEXT, KILL, FAIL,
+        NEXT,
+        ENABLE, DISABLE,
+
+        // FIXME
+        KILL, FAIL,
 
         HISTORY,
-        ENABLE_UPDATE, DISABLE,
         ONLINE, OFFLINE,
         PORT_UP, PORT_DOWN,
 

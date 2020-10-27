@@ -39,7 +39,8 @@ end note
 
 ENTER --> PREPARE : enable
 ENTER --> REMOVING : disable
-ENTER : exit / copy BFD-discriminator from context
+ENTER : enter / load existing session
+ENTER : enter / load existing properties
 
 PREPARE : enter / allocate(lock) BFD-discriminator
 PREPARE : enter / [isOnline] make BFD-setup action and fire ready

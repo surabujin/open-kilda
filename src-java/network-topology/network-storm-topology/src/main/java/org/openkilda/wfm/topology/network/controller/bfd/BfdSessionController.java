@@ -15,24 +15,94 @@
 
 package org.openkilda.wfm.topology.network.controller.bfd;
 
-import org.openkilda.model.BfdProperties;
+import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
+import org.openkilda.wfm.share.model.Endpoint;
+import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmContext;
+import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmFactory;
+import org.openkilda.wfm.topology.network.model.BfdSessionData;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class BfdSessionController {
+    private final BfdSessionFsm.BfdSessionFsmFactory fsmFactory;
+
+    private final Endpoint logical;
+    private final int physicalPortNumber;
+
     private BfdSessionFsm fsm;
+    private BfdSessionData sessionData;
 
-    private BfdProperties goal;
+    public BfdSessionController(
+            BfdSessionFsm.BfdSessionFsmFactory fsmFactory, Endpoint logical, int physicalPortNumber) {
+        this.fsmFactory = fsmFactory;
 
-    /*
-    void enableUpdateSession(Endpoint physical, IslReference reference, BfdProperties properties);
+        this.logical = logical;
+        this.physicalPortNumber = physicalPortNumber;
+    }
 
-    void disableSession(Endpoint physical);
+    public void enableUpdate(BfdSessionData sessionData) {
+        this.sessionData = sessionData;
+        rotate();
+    }
 
-    void updateSessionOnlineStatus(Endpoint logical, boolean isOnline);
+    public void disable() {
+        handle(Event.DISABLE);
+    }
 
-    void bfdKillNotification(Endpoint physicalEndpoint);
+    public void speakerResponse(String key) {
+        speakerResponse(key, null);  // timeout
+    }
 
-    void logicalPortControllerAddNotification(Endpoint physical);
+    public void speakerResponse(String key, BfdSessionResponse response) {
+        BfdSessionFsmContext context = BfdSessionFsmContext.builder()
+                .requestKey(key)
+                .speakerResponse(response)
+                .build();
+        handle(Event.SPEAKER_RESPONSE, context);
+    }
 
-    void logicalPortControllerDelNotification(Endpoint physical);
-    */
+    private void handle(Event event) {
+        handle(event, BfdSessionFsmContext.builder().build());
+    }
+
+    private void handle(Event event, BfdSessionFsmContext context) {
+        if (fsm == null) {
+            log.error(
+                    "There is no active BFD session FSM for {}, ignore event {} with context {}",
+                    logical, event, context);
+            emitCompleteNotification();
+            return;
+        }
+
+        BfdSessionFsmFactory.EXECUTOR.fire(fsm, event, context);
+        if (fsm.isTerminated()) {
+            fsm = null;
+            rotate();
+        }
+    }
+
+    private void rotate() {
+        if (sessionData == null) {
+            emitCompleteNotification();
+            return;
+        }
+
+        if (fsm == null) {
+            fsm = fsmFactory.produce(logical, physicalPortNumber);
+            fsm.disableIfExists();
+        }
+
+        if (fsm.enableIfReady(sessionData)) {
+            sessionData = null;
+        }
+    }
+
+    private void emitCompleteNotification() {
+        fsmFactory.getCarrier().sessionCompleteNotification(getPhysical());
+    }
+
+    private Endpoint getPhysical() {
+        return Endpoint.of(logical.getDatapath(), physicalPortNumber);
+    }
 }
