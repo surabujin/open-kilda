@@ -19,6 +19,7 @@ import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmContext;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmFactory;
+import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.Event;
 import org.openkilda.wfm.topology.network.model.BfdSessionData;
 
 import lombok.extern.slf4j.Slf4j;
@@ -89,8 +90,8 @@ public class BfdSessionController {
         }
 
         if (fsm == null) {
-            fsm = fsmFactory.produce(logical, physicalPortNumber);
-            fsm.disableIfExists();
+            fsm = fsmFactory.produce(sessionData.getReference(), logical, physicalPortNumber);
+            fsm.disableIfConfigured();
         }
 
         if (fsm.enableIfReady(sessionData)) {

@@ -6,6 +6,7 @@ Internal data
 * BFD properties
 * action
 * tear down flag
+* error flag
 
 Internal signals
 * action-success
@@ -37,21 +38,24 @@ note right of ENTER
     created. i.e. FSM must not stay in this state.
 end note
 
-ENTER --> PREPARE : enable
-ENTER --> REMOVING : disable
 ENTER : enter / load existing session
 ENTER : enter / load existing properties
+ENTER --> PREPARE : enable
+ENTER --> REMOVING : disable
 
 PREPARE : enter / allocate(lock) BFD-discriminator
 PREPARE : enter / [isOnline] make BFD-setup action and fire ready
 PREPARE --> CREATING : ready
 PREPARE --> HOUSEKEEPING : disable
+PREPARE --> ERROR : error
 PREPARE : online / make BFD-setup action and fire ready
 
 CREATING : enter / clean port status transitions
 CREATING --> ACTIVE : action-success
+CREATING --> ERROR : action-fail
 CREATING --> REMOVING : disable
 
+ACTIVE : enter / save properties into DB
 state ACTIVE {
     [*] --> WAIT_STATUS
 
@@ -65,20 +69,22 @@ state ACTIVE {
     DOWN -l-> UP : port-up
     DOWN : enter / emit bfd-down
 }
-ACTIVE : enter / save properties into DB
 ACTIVE --> REMOVING : disable
 ACTIVE : offline / emit bfd-kill
 ACTIVE : offline / clean port status transitions
 ACTIVE : exit / emit bfd-kill
 
-REMOVING : enter / set tear down flag
+REMOVING : enter / raise tear down flag
 REMOVING : enter / [isOnline] make BFD-remove action
 REMOVING --> HOUSEKEEPING : action-success
 REMOVING : online / make BFD-remove action
 REMOVING : disable / [isOnline] make BFD-remove action
 REMOVING : action-fail / report fail
 
-HOUSEKEEPING : enter / release BFD-descriptor
+ERROR : enter / raise error flag
+ERROR --> HOUSEKEEPING : next
+
+HOUSEKEEPING : enter / [discriminator != null] release BFD-descriptor
 HOUSEKEEPING --> [*] : next
 
 @enduml
