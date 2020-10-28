@@ -52,15 +52,17 @@ public class BfdSessionController {
     }
 
     public void speakerResponse(String key) {
-        speakerResponse(key, null);  // timeout
+        if (isFsmExists()) {
+            fsm.speakerResponse(key);
+            rotateIfCompleted();
+        }
     }
 
     public void speakerResponse(String key, BfdSessionResponse response) {
-        BfdSessionFsmContext context = BfdSessionFsmContext.builder()
-                .requestKey(key)
-                .speakerResponse(response)
-                .build();
-        handle(Event.SPEAKER_RESPONSE, context);
+        if (isFsmExists()) {
+            fsm.speakerResponse(key, response);
+            rotateIfCompleted();
+        }
     }
 
     private void handle(Event event) {
@@ -77,10 +79,20 @@ public class BfdSessionController {
         }
 
         BfdSessionFsmFactory.EXECUTOR.fire(fsm, event, context);
-        if (fsm.isTerminated()) {
-            fsm = null;
-            rotate();
+        rotateIfCompleted();
+    }
+
+    private void rotateIfCompleted() {
+        if (!fsm.isTerminated()) {
+            return;
         }
+
+        if (fsm.isError() && sessionData == null) {
+            sessionData = fsm.getSessionData();
+        }
+
+        fsm = null;
+        rotate();
     }
 
     private void rotate() {
@@ -90,13 +102,22 @@ public class BfdSessionController {
         }
 
         if (fsm == null) {
-            fsm = fsmFactory.produce(sessionData.getReference(), logical, physicalPortNumber);
+            fsm = fsmFactory.produce(sessionData, logical, physicalPortNumber);
             fsm.disableIfConfigured();
         }
 
-        if (fsm.enableIfReady(sessionData)) {
+        if (fsm.enableIfReady()) {
             sessionData = null;
         }
+    }
+
+    private boolean isFsmExists() {
+        if (fsm == null) {
+            log.error("There si no active BFD session FSM for {}", logical);
+            emitCompleteNotification();
+            return false;
+        }
+        return true;
     }
 
     private void emitCompleteNotification() {

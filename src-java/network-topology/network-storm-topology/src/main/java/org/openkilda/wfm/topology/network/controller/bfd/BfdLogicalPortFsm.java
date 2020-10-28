@@ -45,8 +45,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         implements SwitchOnlineStatusListener {
     private final IBfdLogicalPortCarrier carrier;
 
-    private final SwitchOnlineStatusMonitor switchOnlineStatusMonitor;
-
     private final Set<String> activeRequest = new HashSet<>();
 
     @Getter
@@ -55,16 +53,16 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
     private final int logicalPortNumber;
 
     private BfdSessionData sessionData;
+    private boolean online;
 
     public BfdLogicalPortFsm(
             IBfdLogicalPortCarrier carrier, SwitchOnlineStatusMonitor switchOnlineStatusMonitor,
             Endpoint physicalEndpoint, Integer logicalPortNumber) {
         this.carrier = carrier;
-        this.switchOnlineStatusMonitor = switchOnlineStatusMonitor;
         this.physicalEndpoint = physicalEndpoint;
         this.logicalPortNumber = logicalPortNumber;
 
-        switchOnlineStatusMonitor.subscribe(physicalEndpoint.getDatapath(), this);
+        online = switchOnlineStatusMonitor.subscribe(physicalEndpoint.getDatapath(), this);
         carrier.logicalPortControllerAddNotification(physicalEndpoint);
     }
 
@@ -101,6 +99,8 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
     @Override
     public void switchOnlineStatusUpdate(boolean isOnline) {
+        online = isOnline;
+
         BfdLogicalPortFsmContext context = BfdLogicalPortFsmContext.builder().build();
         BfdLogicalPortFsmFactory.EXECUTOR.fire(this, isOnline ? Event.ONLINE : Event.OFFLINE, context);
     }
@@ -139,7 +139,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
     }
 
     public void stopEnterAction(State from, State to, Event event, BfdLogicalPortFsmContext context) {
-        switchOnlineStatusMonitor.unsubscribe(physicalEndpoint.getDatapath(), this);
         carrier.logicalPortControllerDelNotification(physicalEndpoint);
     }
 
@@ -192,7 +191,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
     private void sendPortCreateRequest() {
         Endpoint logical = getLogicalEndpoint();
-        if (switchOnlineStatusMonitor.getStatus(physicalEndpoint.getDatapath())) {
+        if (online) {
             activeRequest.add(carrier.createLogicalPort(logical, physicalEndpoint.getPortNumber()));
         } else {
             log.debug("Do not send logical port {} create request because the switch is offline now", logical);
@@ -201,7 +200,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
     private void sendPortDeleteRequest() {
         Endpoint logical = getLogicalEndpoint();
-        if (switchOnlineStatusMonitor.getStatus(physicalEndpoint.getDatapath())) {
+        if (online) {
             activeRequest.add(carrier.deleteLogicalPort(logical));
         } else {
             log.debug("Do not send logical port {} delete request because the switch is offline now", logical);

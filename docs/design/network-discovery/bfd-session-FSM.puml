@@ -59,9 +59,9 @@ ACTIVE : enter / save properties into DB
 state ACTIVE {
     [*] --> WAIT_STATUS
 
+    WAIT_STATUS : enter / pull port status transition
     WAIT_STATUS --> UP : port-up
     WAIT_STATUS --> DOWN : port-down
-    WAIT_STATUS : enter / pull port status transition
 
     UP -r-> DOWN : port-down
     UP : enter / emit bfd-up
@@ -79,9 +79,9 @@ REMOVING : enter / [isOnline] make BFD-remove action
 REMOVING --> HOUSEKEEPING : action-success
 REMOVING : online / make BFD-remove action
 REMOVING : disable / [isOnline] make BFD-remove action
-REMOVING : action-fail / report fail
 
 ERROR : enter / raise error flag
+ERROR : enter / emit bfd-fail
 ERROR --> HOUSEKEEPING : next
 
 HOUSEKEEPING : enter / [discriminator != null] release BFD-descriptor

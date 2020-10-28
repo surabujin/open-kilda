@@ -18,12 +18,14 @@ package org.openkilda.wfm.topology.network.utils;
 import lombok.Getter;
 import lombok.NonNull;
 
+import java.lang.ref.WeakReference;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
 abstract class BaseMonitorEntry<L, S> {
-    protected final List<L> subscribers = new LinkedList<>();
+    protected final List<WeakReference<L>> subscribers = new LinkedList<>();
 
     @Getter
     @NonNull
@@ -33,13 +35,9 @@ abstract class BaseMonitorEntry<L, S> {
         this.status = status;
     }
 
-    void subscribe(L listener) {
-        subscribers.add(listener);
-    }
-
-    boolean unsubscribe(L listener) {
-        subscribers.remove(listener);
-        return isEmpty();
+    S subscribe(L listener) {
+        subscribers.add(new WeakReference<>(listener));
+        return status;
     }
 
     void update(@NonNull S change) {
@@ -48,7 +46,14 @@ abstract class BaseMonitorEntry<L, S> {
         }
 
         status = change;
-        for (L entry : subscribers) {
+        Iterator<WeakReference<L>> iterator = subscribers.iterator();
+        while (iterator.hasNext()) {
+            L entry = iterator.next().get();
+            if (entry == null) {
+                iterator.remove();
+                continue;
+            }
+
             propagate(entry, change);
         }
     }

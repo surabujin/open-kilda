@@ -21,20 +21,9 @@ import java.util.Map;
 public abstract class BaseMonitor<R, L, S, E extends BaseMonitorEntry<L, S>> {
     protected final Map<R, E> monitors = new HashMap<>();
 
-    public void subscribe(R switchId, L listener) {
-        monitors.computeIfAbsent(switchId, this::makeEntry)
+    public S subscribe(R switchId, L listener) {
+        return monitors.computeIfAbsent(switchId, this::makeEntry)
                 .subscribe(listener);
-    }
-
-    public void unsubscribe(R switchId, L listener) {
-        E entry = monitors.get(switchId);
-        if (entry == null) {
-            return;
-        }
-
-        if (entry.unsubscribe(listener)) {
-            monitors.remove(switchId);
-        }
     }
 
     public void update(R reference, S change) {
@@ -45,12 +34,5 @@ public abstract class BaseMonitor<R, L, S, E extends BaseMonitorEntry<L, S>> {
         }
     }
 
-    public S getStatus(R switchId) {
-        E entry = monitors.getOrDefault(switchId, getDummyEntry());
-        return entry.getStatus();
-    }
-
     protected abstract E makeEntry(R reference);
-
-    protected abstract E getDummyEntry();
 }
