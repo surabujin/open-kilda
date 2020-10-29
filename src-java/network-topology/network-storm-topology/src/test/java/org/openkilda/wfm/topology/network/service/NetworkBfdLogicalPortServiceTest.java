@@ -29,6 +29,7 @@ import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.share.model.IslReference;
 import org.openkilda.wfm.topology.network.error.ControllerNotFoundException;
+import org.openkilda.wfm.topology.network.model.BfdSessionData;
 import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusMonitor;
 
 import org.junit.Assert;
@@ -105,19 +106,8 @@ public class NetworkBfdLogicalPortServiceTest {
     }
 
     private void verifyGenericWorkflow(NetworkBfdLogicalPortService service) {
-        verify(carrier).enableUpdateSession(eq(physical), eq(reference), eq(propertiesEnabled));
-        verifyNoMoreInteractions(carrier);
-        reset(carrier);
-
-        // proxy offline
-        switchOnlineStatusMonitor.update(physical.getDatapath(), false);
-        verify(carrier).updateSessionOnlineStatus(eq(logical), eq(false));
-        verifyNoMoreInteractions(carrier);
-        reset(carrier);
-
-        // proxy online
-        switchOnlineStatusMonitor.update(physical.getDatapath(), true);
-        verify(carrier).updateSessionOnlineStatus(eq(logical), eq(true));
+        verify(carrier).enableUpdateSession(
+                eq(logical), eq(physical.getPortNumber()), eq(new BfdSessionData(reference, propertiesEnabled)));
         verifyNoMoreInteractions(carrier);
         reset(carrier);
 
@@ -156,7 +146,8 @@ public class NetworkBfdLogicalPortServiceTest {
         reset(carrier);
 
         service.apply(physical, reference, propertiesEnabled);
-        verify(carrier).enableUpdateSession(eq(physical), eq(reference), eq(propertiesEnabled));
+        verify(carrier).enableUpdateSession(
+                eq(logical), eq(physical.getPortNumber()), eq(new BfdSessionData(reference, propertiesEnabled)));
         reset(carrier);
 
         service.apply(physical, reference, propertiesDisabled);
@@ -181,7 +172,8 @@ public class NetworkBfdLogicalPortServiceTest {
         verifyNoMoreInteractions(carrier);
 
         service.portAdd(logical, physical.getPortNumber());
-        verify(carrier).enableUpdateSession(eq(physical), eq(reference), eq(altProperties));
+        verify(carrier).enableUpdateSession(
+                eq(logical), eq(physical.getPortNumber()), eq(new BfdSessionData(reference, altProperties)));
     }
 
     @Test
@@ -209,7 +201,8 @@ public class NetworkBfdLogicalPortServiceTest {
         service.apply(physical, reference, altProperties);
         service.portAdd(logical, physical.getPortNumber());
 
-        verify(carrier).enableUpdateSession(eq(physical), eq(reference), eq(altProperties));
+        verify(carrier).enableUpdateSession(
+                eq(logical), eq(physical.getPortNumber()), eq(new BfdSessionData(reference, altProperties)));
     }
 
     @Test
@@ -290,8 +283,9 @@ public class NetworkBfdLogicalPortServiceTest {
         verify(carrier).createLogicalPort(eq(logical), eq(physical.getPortNumber()));
         reset(carrier);
 
-        // FIXME
-//        service.portAdd(logical, physical.getPortNumber());
+        service.portAdd(logical, physical.getPortNumber());
+        verify(carrier).enableUpdateSession(
+                eq(logical), eq(physical.getPortNumber()), eq(new BfdSessionData(reference, propertiesEnabled)));
     }
 
     private NetworkBfdLogicalPortService makeService() {

@@ -80,13 +80,14 @@ public class NetworkIntegrationCarrier
 
         bfdLogicalPortService = new NetworkBfdLogicalPortService(
                 this, switchOnlineStatusMonitor, options.getBfdLogicalPortOffset());
-        bfdSessionService = new NetworkBfdSessionService(persistenceManager, , this);
+        bfdSessionService = new NetworkBfdSessionService(
+                persistenceManager, switchOnlineStatusMonitor, endpointStatusMonitor, this);
         bfdGlobalToggleService = new NetworkBfdGlobalToggleService(this, persistenceManager);
     }
 
     @Override
-    public void bfdPropertiesApplyRequest(Endpoint physicalEndpoint, IslReference reference, BfdProperties properties) {
-        bfdSessionService.enableUpdate(physicalEndpoint, , reference, properties);
+    public void bfdPropertiesApplyRequest(Endpoint physical, IslReference reference, BfdProperties properties) {
+        bfdLogicalPortService.apply(physical, reference, properties);
     }
 
     @Override
@@ -159,11 +160,6 @@ public class NetworkIntegrationCarrier
     @Override
     public void disableSession(Endpoint logical) {
         bfdSessionService.disable(logical);
-    }
-
-    @Override
-    public void updateSessionOnlineStatus(Endpoint logical, boolean isOnline) {
-        bfdSessionService.updateOnlineStatus(logical, isOnline);
     }
 
     @Override
@@ -265,7 +261,7 @@ public class NetworkIntegrationCarrier
 
     @Override
     public void sendBfdLinkStatusUpdate(Endpoint logicalEndpoint, LinkStatus linkStatus) {
-        bfdSessionService.updateLinkStatus(logicalEndpoint, linkStatus);
+        endpointStatusMonitor.update(logicalEndpoint, linkStatus);
     }
 
     @Override

@@ -171,14 +171,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         sendSessionFailNotification();
     }
 
-    public void sendSessionOfflineAction(State from, State to, Event event, BfdLogicalPortFsmContext context) {
-        updateSessionOnlineStatus(false);
-    }
-
-    public void sendSessionOnlineAction(State from, State to, Event event, BfdLogicalPortFsmContext context) {
-        updateSessionOnlineStatus(true);
-    }
-
     public void saveSessionDataAction(State from, State to, Event event, BfdLogicalPortFsmContext context) {
         saveSessionData(context);
     }
@@ -221,10 +213,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
     private void sendSessionDisableRequest() {
         carrier.disableSession(getLogicalEndpoint());
-    }
-
-    private void updateSessionOnlineStatus(boolean isOnline) {
-        carrier.updateSessionOnlineStatus(getLogicalEndpoint(), isOnline);
     }
 
     private void reportWorkerResponseIgnored(String requestId, MessageData response) {
@@ -272,8 +260,6 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
 
             final String sendSessionDisableAction = "sendSessionDisableAction";
             final String sendSessionEnableUpdateAction = "sendSessionEnableUpdateAction";
-            final String sendSessionOfflineAction = "sendSessionOfflineAction";
-            final String sendSessionOnlineAction = "sendSessionOnlineAction";
             final String sendPortCreateAction = "sendPortCreateAction";
             final String saveSessionDataAction = "saveSessionDataAction";
             final String sendPortDeleteAction = "sendPortDeleteAction";
@@ -339,13 +325,7 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
             builder.internalTransition()
                     .within(State.OPERATIONAL).on(Event.DISABLE)
                     .callMethod(sendSessionDisableAction);
-            builder.internalTransition()
-                    .within(State.OPERATIONAL).on(Event.OFFLINE)
-                    .callMethod(sendSessionOfflineAction);
-            builder.internalTransition()
-                    .within(State.OPERATIONAL).on(Event.ONLINE)
-                    .callMethod(sendSessionOnlineAction);
-            
+
             // REMOVING
             builder.transition()
                     .from(State.REMOVING).to(State.PREPARE).on(Event.ENABLE_UPDATE);

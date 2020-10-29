@@ -85,7 +85,7 @@ public class BfdHub extends AbstractBolt
     private final PersistenceManager persistenceManager;
 
     private transient SwitchOnlineStatusMonitor switchOnlineStatusMonitor;
-    private transient EndpointStatusMonitor endpointStatusMonitor = new EndpointStatusMonitor();
+    private transient EndpointStatusMonitor endpointStatusMonitor;
 
     private transient NetworkBfdLogicalPortService logicalPortService;
     private transient NetworkBfdSessionService sessionService;
@@ -169,11 +169,6 @@ public class BfdHub extends AbstractBolt
     @Override
     public void disableSession(Endpoint logical) {
         sessionService.disable(logical);
-    }
-
-    @Override
-    public void updateSessionOnlineStatus(Endpoint logical, boolean isOnline) {
-        sessionService.updateOnlineStatus(logical, isOnline);
     }
 
     @Override
@@ -281,7 +276,7 @@ public class BfdHub extends AbstractBolt
     }
 
     public void processLinkStatusUpdate(Endpoint logical, LinkStatus status) {
-        sessionService.updateLinkStatus(logical, status);
+        endpointStatusMonitor.update(logical, status);
     }
 
     public void processOnlineStatusUpdate(SwitchId switchId, boolean isOnline) {
@@ -325,10 +320,12 @@ public class BfdHub extends AbstractBolt
     @Override
     protected void init() {
         switchOnlineStatusMonitor = new SwitchOnlineStatusMonitor();
+        endpointStatusMonitor = new EndpointStatusMonitor();
 
         logicalPortService = new NetworkBfdLogicalPortService(
                 this, switchOnlineStatusMonitor, options.getBfdLogicalPortOffset());
-        sessionService = new NetworkBfdSessionService(persistenceManager, , this);
+        sessionService = new NetworkBfdSessionService(
+                persistenceManager, switchOnlineStatusMonitor, endpointStatusMonitor, this);
         globalToggleService = new NetworkBfdGlobalToggleService(this, persistenceManager);
         requestIdFactory = new TaskIdBasedKeyFactory(getTaskId());
     }

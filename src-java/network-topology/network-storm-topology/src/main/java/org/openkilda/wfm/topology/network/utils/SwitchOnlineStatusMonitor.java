@@ -33,9 +33,4 @@ public class SwitchOnlineStatusMonitor
     protected SwitchOnlineStatusMonitorEntry makeEntry(SwitchId reference) {
         return new SwitchOnlineStatusMonitorEntry();
     }
-
-    @Override
-    protected SwitchOnlineStatusMonitorEntry getDummyEntry() {
-        return dummy;
-    }
 }

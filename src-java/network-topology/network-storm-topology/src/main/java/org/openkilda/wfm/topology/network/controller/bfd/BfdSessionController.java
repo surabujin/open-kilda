@@ -17,21 +17,20 @@ package org.openkilda.wfm.topology.network.controller.bfd;
 
 import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
 import org.openkilda.wfm.share.model.Endpoint;
-import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmContext;
-import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmFactory;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.Event;
 import org.openkilda.wfm.topology.network.model.BfdSessionData;
+import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusListener;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.Getter;
 
-@Slf4j
-public class BfdSessionController {
+public class BfdSessionController implements SwitchOnlineStatusListener {
     private final BfdSessionFsm.BfdSessionFsmFactory fsmFactory;
 
+    @Getter
     private final Endpoint logical;
     private final int physicalPortNumber;
 
-    private BfdSessionFsm fsm;
+    private BfdSessionManager manager;
     private BfdSessionData sessionData;
 
     public BfdSessionController(
@@ -40,6 +39,10 @@ public class BfdSessionController {
 
         this.logical = logical;
         this.physicalPortNumber = physicalPortNumber;
+
+        manager = new BfdSessionDummy(fsmFactory.getCarrier(), logical, physicalPortNumber);
+
+        fsmFactory.getSwitchOnlineStatusMonitor().subscribe(logical.getDatapath(), this);
     }
 
     public void enableUpdate(BfdSessionData sessionData) {
@@ -48,51 +51,33 @@ public class BfdSessionController {
     }
 
     public void disable() {
-        handle(Event.DISABLE);
+        manager.fire(Event.DISABLE);
     }
 
     public void speakerResponse(String key) {
-        if (isFsmExists()) {
-            fsm.speakerResponse(key);
-            rotateIfCompleted();
-        }
+        manager.speakerResponse(key);
     }
 
     public void speakerResponse(String key, BfdSessionResponse response) {
-        if (isFsmExists()) {
-            fsm.speakerResponse(key, response);
-            rotateIfCompleted();
-        }
+        manager.speakerResponse(key, response);
     }
 
-    private void handle(Event event) {
-        handle(event, BfdSessionFsmContext.builder().build());
-    }
+    public void handleCompleteNotification(BfdSessionData session, boolean isSuccess) {
+        manager = new BfdSessionDummy(fsmFactory.getCarrier(), logical, physicalPortNumber);
 
-    private void handle(Event event, BfdSessionFsmContext context) {
-        if (fsm == null) {
-            log.error(
-                    "There is no active BFD session FSM for {}, ignore event {} with context {}",
-                    logical, event, context);
-            emitCompleteNotification();
+        if (! isSuccess && sessionData == null) {
+            sessionData = session;
             return;
         }
 
-        BfdSessionFsmFactory.EXECUTOR.fire(fsm, event, context);
-        rotateIfCompleted();
-    }
-
-    private void rotateIfCompleted() {
-        if (!fsm.isTerminated()) {
-            return;
-        }
-
-        if (fsm.isError() && sessionData == null) {
-            sessionData = fsm.getSessionData();
-        }
-
-        fsm = null;
         rotate();
+    }
+
+    @Override
+    public void switchOnlineStatusUpdate(boolean isOnline) {
+        if (isOnline && manager.isDummy()) {
+            rotate();
+        }
     }
 
     private void rotate() {
@@ -101,30 +86,18 @@ public class BfdSessionController {
             return;
         }
 
-        if (fsm == null) {
-            fsm = fsmFactory.produce(sessionData, logical, physicalPortNumber);
-            fsm.disableIfConfigured();
+        if (manager.isDummy()) {
+            BfdSessionBlank sessionBlank = new BfdSessionBlank(this, logical, physicalPortNumber, sessionData);
+            manager = fsmFactory.produce(sessionBlank);
+            manager.disableIfConfigured();
         }
 
-        if (fsm.enableIfReady()) {
+        if (manager.enableIfReady()) {
             sessionData = null;
         }
     }
 
-    private boolean isFsmExists() {
-        if (fsm == null) {
-            log.error("There si no active BFD session FSM for {}", logical);
-            emitCompleteNotification();
-            return false;
-        }
-        return true;
-    }
-
     private void emitCompleteNotification() {
-        fsmFactory.getCarrier().sessionCompleteNotification(getPhysical());
-    }
-
-    private Endpoint getPhysical() {
-        return Endpoint.of(logical.getDatapath(), physicalPortNumber);
+        fsmFactory.getCarrier().sessionCompleteNotification(Endpoint.of(logical.getDatapath(), physicalPortNumber));
     }
 }

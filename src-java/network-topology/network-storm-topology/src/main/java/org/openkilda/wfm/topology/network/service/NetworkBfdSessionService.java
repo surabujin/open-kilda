@@ -84,7 +84,10 @@ public class NetworkBfdSessionService {
     }
 
     public void sessionCompleteNotification(Endpoint physical) {
-        // TODO cleanup
+        BfdSessionController controller = controllerByEndpoint.remove(physical);
+        if (controller != null) {
+            controllerByEndpoint.remove(controller.getLogical());
+        }
     }
 
     // -- private --

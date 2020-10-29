@@ -27,8 +27,6 @@ public interface IBfdLogicalPortCarrier {
 
     void disableSession(Endpoint logical);
 
-    void updateSessionOnlineStatus(Endpoint logical, boolean isOnline);
-
     void bfdKillNotification(Endpoint physicalEndpoint);
 
     void logicalPortControllerAddNotification(Endpoint physical);
