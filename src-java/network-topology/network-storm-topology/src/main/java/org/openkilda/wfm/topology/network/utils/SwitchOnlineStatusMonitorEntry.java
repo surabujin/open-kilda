@@ -1,5 +1,4 @@
-/*
- * Copyright 2020 Telstra Open Source
+/* Copyright 2020 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -15,8 +14,6 @@
  */
 
 package org.openkilda.wfm.topology.network.utils;
-
-import org.openkilda.model.SwitchId;
 
 class SwitchOnlineStatusMonitorEntry extends BaseMonitorEntry<SwitchOnlineStatusListener, Boolean> {
     public SwitchOnlineStatusMonitorEntry() {

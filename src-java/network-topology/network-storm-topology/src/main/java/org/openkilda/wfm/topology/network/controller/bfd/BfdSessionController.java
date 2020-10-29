@@ -40,7 +40,7 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
         this.logical = logical;
         this.physicalPortNumber = physicalPortNumber;
 
-        manager = new BfdSessionDummy(fsmFactory.getCarrier(), logical, physicalPortNumber);
+        manager = new BfdSessionDummy(fsmFactory, logical, physicalPortNumber);
 
         fsmFactory.getSwitchOnlineStatusMonitor().subscribe(logical.getDatapath(), this);
     }
@@ -51,7 +51,7 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
     }
 
     public void disable() {
-        manager.fire(Event.DISABLE);
+        manager.handle(Event.DISABLE);
     }
 
     public void speakerResponse(String key) {
@@ -62,8 +62,11 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
         manager.speakerResponse(key, response);
     }
 
+    /**
+     * Handle manager's complete notification - cleanup resource, do mangers rotation.
+     */
     public void handleCompleteNotification(BfdSessionData session, boolean isSuccess) {
-        manager = new BfdSessionDummy(fsmFactory.getCarrier(), logical, physicalPortNumber);
+        manager = new BfdSessionDummy(fsmFactory, logical, physicalPortNumber);
 
         if (! isSuccess && sessionData == null) {
             sessionData = session;
@@ -86,12 +89,7 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
             return;
         }
 
-        if (manager.isDummy()) {
-            BfdSessionBlank sessionBlank = new BfdSessionBlank(this, logical, physicalPortNumber, sessionData);
-            manager = fsmFactory.produce(sessionBlank);
-            manager.disableIfConfigured();
-        }
-
+        manager = manager.rotate(new BfdSessionBlank(this, logical, physicalPortNumber, sessionData));
         if (manager.enableIfReady()) {
             sessionData = null;
         }

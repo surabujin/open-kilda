@@ -54,8 +54,6 @@ import org.squirrelframework.foundation.fsm.StateMachineBuilder;
 import org.squirrelframework.foundation.fsm.StateMachineBuilderFactory;
 import org.squirrelframework.foundation.fsm.StateMachineLogger;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
@@ -84,7 +82,6 @@ public final class BfdSessionFsm
     private boolean online;
     private LinkStatus endpointStatus;
 
-    private boolean tearingDown;
     private boolean error;
 
     public static BfdSessionFsmFactory factory(
@@ -114,24 +111,24 @@ public final class BfdSessionFsm
     // -- external API --
 
     @Override
-    public boolean enableIfReady() {
-        if (tearingDown) {
-            return false;
-        }
-        if (this.properties != null && ! this.properties.equals(sessionBlank.getProperties())) {
-            return false;
+    public BfdSessionManager rotate(BfdSessionBlank sessionBlank) {
+        if (getSubStatesOn(State.ACTIVE).contains(getCurrentState())
+                && sessionBlank.getProperties().equals(properties)) {
+            return this;
         }
 
-        fire(Event.ENABLE);
-        return true;
+        handle(Event.DISABLE);
+        return this;
     }
 
     @Override
-    public void disableIfConfigured() {
-        if (properties != null) {
-            BfdSessionFsmContext context = BfdSessionFsmContext.builder().build();
-            BfdSessionFsmFactory.EXECUTOR.fire(this, Event.DISABLE, context);
+    public boolean enableIfReady() {
+        if (getCurrentState() != State.ENTER) {
+            return false;
         }
+
+        handle(Event.ENABLE);
+        return true;
     }
 
     @Override
@@ -150,23 +147,26 @@ public final class BfdSessionFsm
     @Override
     public void switchOnlineStatusUpdate(boolean isOnline) {
         online = isOnline;
-
-        fire(isOnline ? Event.ONLINE : Event.OFFLINE);
+        if (! isTerminated()) {
+            handle(isOnline ? Event.ONLINE : Event.OFFLINE);
+        }
     }
 
     @Override
     public void endpointStatusUpdate(LinkStatus status) {
         endpointStatus = status;
-        pullPortStatus();
+        if (! isTerminated()) {
+            handle(mapEndpointStatusToEvent(status));
+        }
     }
 
     @Override
-    public void fire(Event event) {
-        fire(event, BfdSessionFsmContext.builder().build());
+    public void handle(Event event) {
+        handle(event, BfdSessionFsmContext.builder().build());
     }
 
     @Override
-    public void fire(Event event, BfdSessionFsmContext context) {
+    public void handle(Event event, BfdSessionFsmContext context) {
         BfdSessionFsmFactory.EXECUTOR.fire(this, event, context);
     }
 
@@ -217,7 +217,9 @@ public final class BfdSessionFsm
     }
 
     public void waitStatusEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        pullPortStatus();
+        if (endpointStatus != null) {
+            fire(mapEndpointStatusToEvent(endpointStatus), context);
+        }
     }
 
     public void upEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
@@ -231,7 +233,6 @@ public final class BfdSessionFsm
     }
 
     public void removingEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        tearingDown = true;
         makeSessionRemoveAction(context);
     }
 
@@ -239,9 +240,13 @@ public final class BfdSessionFsm
         makeSessionRemoveAction(context);
     }
 
+    public void emitBfdFailAction(State from, State to, Event event, BfdSessionFsmContext context) {
+        emitBfdFail();
+    }
+
     public void errorEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
         error = true;
-        carrier.bfdFailNotification(sessionBlank.getPhysicalEndpoint());
+        emitBfdFail();
     }
 
     public void housekeepingEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
@@ -249,10 +254,16 @@ public final class BfdSessionFsm
     }
 
     public void stopEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        sessionBlank.completeNotification(error);
+        sessionBlank.completeNotification(! error);
     }
 
     // -- private/service methods --
+
+    private void disableIfConfigured() {
+        if (properties != null && discriminator != null) {
+            handle(Event.DISABLE);
+        }
+    }
 
     private void loadExistingSession() {
         transactionManager.doInTransaction(() -> loadBfdSession().ifPresent(this::loadExistingSession));
@@ -278,7 +289,7 @@ public final class BfdSessionFsm
             throw new IllegalStateException(makeLogPrefix() + " there is no allocated discriminator");
         }
 
-        BfdProperties properties = sessionBlank.getProperties();
+        BfdProperties effectiveProperties = properties != null ? properties : sessionBlank.getProperties();
         return NoviBfdSession.builder()
                 .target(descriptor.getLocal())
                 .remote(descriptor.getRemote())
@@ -287,8 +298,8 @@ public final class BfdSessionFsm
                 .udpPortNumber(BFD_UDP_PORT)
                 .discriminator(discriminator)
                 .keepOverDisconnect(true)
-                .intervalMs((int) properties.getInterval().toMillis())
-                .multiplier(properties.getMultiplier())
+                .intervalMs((int) effectiveProperties.getInterval().toMillis())
+                .multiplier(effectiveProperties.getMultiplier())
                 .build();
     }
 
@@ -301,7 +312,7 @@ public final class BfdSessionFsm
     private void allocateDiscriminator(BfdDescriptor descriptor) {
         while (true) {
             try {
-                transactionManager.doInTransaction(
+                discriminator = transactionManager.doInTransaction(
                         () -> allocateDiscriminator(descriptor, loadBfdSession().orElse(null)));
                 break;
             } catch (ConstraintViolationException ex) {
@@ -310,26 +321,31 @@ public final class BfdSessionFsm
         }
     }
 
-    private void allocateDiscriminator(BfdDescriptor descriptor, BfdSession bfdSession) {
+    private Integer allocateDiscriminator(BfdDescriptor descriptor, BfdSession bfdSession) {
         final Endpoint logical = sessionBlank.getLogicalEndpoint();
         final int physicalPortNumber = sessionBlank.getPhysicalPortNumber();
-        if (bfdSession == null || bfdSession.getDiscriminator() == null) {
-            // FIXME(surabujin): loop will never end if all possible discriminators are allocated
-            int discriminator = random.nextInt();
-            if (bfdSession != null) {
-                bfdSession.setDiscriminator(discriminator);
-                descriptor.fill(bfdSession);
-            } else {
-                bfdSession = BfdSession.builder()
-                        .switchId(logical.getDatapath())
-                        .port(logical.getPortNumber())
-                        .physicalPort(physicalPortNumber)
-                        .discriminator(discriminator)
-                        .build();
-                descriptor.fill(bfdSession);
-                bfdSessionRepository.add(bfdSession);
-            }
+
+        if (bfdSession != null && bfdSession.getDiscriminator() != null) {
+            return bfdSession.getDiscriminator();
         }
+
+        // FIXME(surabujin): loop will never end if all possible discriminators are allocated
+        Integer attempt = random.nextInt();
+        if (bfdSession != null) {
+            bfdSession.setDiscriminator(attempt);
+            descriptor.fill(bfdSession);
+        } else {
+            bfdSession = BfdSession.builder()
+                    .switchId(logical.getDatapath())
+                    .port(logical.getPortNumber())
+                    .physicalPort(physicalPortNumber)
+                    .discriminator(attempt)
+                    .build();
+            descriptor.fill(bfdSession);
+            bfdSessionRepository.add(bfdSession);
+        }
+
+        return attempt;
     }
 
     private void releaseDiscriminator() {
@@ -399,26 +415,8 @@ public final class BfdSessionFsm
         return new SwitchReference(datapath, sw.getSocketAddress().getAddress());
     }
 
-    private void pullPortStatus() {
-        if (endpointStatus == null) {
-            return;
-        }
-
-        Event event;
-        switch (endpointStatus) {
-            case UP:
-                event = Event.PORT_UP;
-                break;
-            case DOWN:
-                event = Event.PORT_DOWN;
-                break;
-
-            default:
-                throw new IllegalStateException(String.format(
-                        "%s - there is no mapping from %s.%s into %s",
-                        makeLogPrefix(), endpointStatus.getClass().getName(), endpointStatus, Event.class.getName()));
-        }
-        fire(event);
+    private void emitBfdFail() {
+        carrier.bfdFailNotification(sessionBlank.getPhysicalEndpoint());
     }
 
     private void handleActionResult(BfdSessionAction.ActionResult result, BfdSessionResponse response) {
@@ -434,7 +432,7 @@ public final class BfdSessionFsm
         BfdSessionFsmContext context = BfdSessionFsmContext.builder()
                 .speakerResponse(response)
                 .build();
-        fire(event, context);
+        handle(event, context);
     }
 
     private void reportActionFailure(BfdSessionAction.ActionResult result) {
@@ -444,6 +442,24 @@ public final class BfdSessionFsm
         } else {
             logError(String.format("%s with error %s", prefix, result.getErrorCode()));
         }
+    }
+
+    private Event mapEndpointStatusToEvent(LinkStatus status) {
+        Event event;
+        switch (status) {
+            case UP:
+                event = Event.PORT_UP;
+                break;
+            case DOWN:
+                event = Event.PORT_DOWN;
+                break;
+
+            default:
+                throw new IllegalStateException(String.format(
+                        "%s - there is no mapping from %s.%s into %s",
+                        makeLogPrefix(), status.getClass().getName(), status, Event.class.getName()));
+        }
+        return event;
     }
 
     private void logInfo(String message, Object... args) {
@@ -493,6 +509,7 @@ public final class BfdSessionFsm
                     IBfdSessionCarrier.class, BfdSessionBlank.class);
 
             final String sessionRemoveAction = "sessionRemoveAction";
+            final String emitBfdFailAction = "emitBfdFailAction";
 
             // ENTER
             builder.onEntry(State.ENTER)
@@ -566,6 +583,9 @@ public final class BfdSessionFsm
             builder.transition()
                     .from(State.REMOVING).to(State.HOUSEKEEPING).on(Event.ACTION_SUCCESS);
             builder.internalTransition()
+                    .within(State.REMOVING).on(Event.ACTION_FAIL)
+                    .callMethod(emitBfdFailAction);
+            builder.internalTransition()
                     .within(State.REMOVING).on(Event.ONLINE)
                     .callMethod(sessionRemoveAction);
             builder.internalTransition()
@@ -594,6 +614,9 @@ public final class BfdSessionFsm
             BfdSessionFsm entity = builder.newStateMachine(
                     State.ENTER, persistenceManager, switchOnlineStatusMonitor, endpointStatusMonitor, carrier,
                     sessionBlank);
+            entity.start(BfdSessionFsmContext.builder().build());
+            entity.disableIfConfigured();
+
             // FIXME - DEBUG!
             new StateMachineLogger(entity).startLogging();
             // FIXME - DEBUG!

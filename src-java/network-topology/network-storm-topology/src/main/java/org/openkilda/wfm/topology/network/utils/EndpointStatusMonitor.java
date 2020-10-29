@@ -21,8 +21,6 @@ import org.openkilda.wfm.topology.network.model.LinkStatus;
 
 public class EndpointStatusMonitor
         extends BaseMonitor<Endpoint, EndpointStatusListener, LinkStatus, EndpointStatusMonitorEntry> {
-    private final static EndpointStatusMonitorEntry dummy = new EndpointStatusMonitorEntry();
-
     public void cleanup(SwitchId switchId) {
         monitors.keySet().removeIf(key -> switchId.equals(key.getDatapath()));
     }
@@ -30,10 +28,5 @@ public class EndpointStatusMonitor
     @Override
     protected EndpointStatusMonitorEntry makeEntry(Endpoint reference) {
         return new EndpointStatusMonitorEntry();
-    }
-
-    @Override
-    protected EndpointStatusMonitorEntry getDummyEntry() {
-        return dummy;
     }
 }

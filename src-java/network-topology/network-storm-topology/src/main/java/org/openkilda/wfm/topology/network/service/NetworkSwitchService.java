@@ -23,7 +23,6 @@ import org.openkilda.messaging.model.SpeakerSwitchView;
 import org.openkilda.model.SwitchId;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.wfm.share.utils.FsmExecutor;
-import org.openkilda.wfm.topology.network.NetworkTopologyDashboardLogger;
 import org.openkilda.wfm.topology.network.controller.sw.SwitchFsm;
 import org.openkilda.wfm.topology.network.controller.sw.SwitchFsm.SwitchFsmContext;
 import org.openkilda.wfm.topology.network.controller.sw.SwitchFsm.SwitchFsmEvent;

@@ -1,11 +1,8 @@
 Internal data
-* ISL reference
+* BfdSessionData
 * BFD descriptor
-* switch online status listener
-* port status listener
-* BFD properties
+* effective properties
 * action
-* tear down flag
 * error flag
 
 Internal signals
@@ -43,6 +40,7 @@ ENTER : enter / load existing properties
 ENTER --> PREPARE : enable
 ENTER --> REMOVING : disable
 
+PREPARE : enter / reset effective properties
 PREPARE : enter / allocate(lock) BFD-discriminator
 PREPARE : enter / [isOnline] make BFD-setup action and fire ready
 PREPARE --> CREATING : ready
@@ -74,9 +72,9 @@ ACTIVE : offline / emit bfd-kill
 ACTIVE : offline / clean port status transitions
 ACTIVE : exit / emit bfd-kill
 
-REMOVING : enter / raise tear down flag
 REMOVING : enter / [isOnline] make BFD-remove action
 REMOVING --> HOUSEKEEPING : action-success
+REMOVING : action-fail / emit bfd-fail
 REMOVING : online / make BFD-remove action
 REMOVING : disable / [isOnline] make BFD-remove action
 

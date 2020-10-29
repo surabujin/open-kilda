@@ -26,6 +26,9 @@ public abstract class BaseMonitor<R, L, S, E extends BaseMonitorEntry<L, S>> {
                 .subscribe(listener);
     }
 
+    /**
+     * Update monitor status - propagate status to all subscribers.
+     */
     public void update(R reference, S change) {
         E entry = monitors.computeIfAbsent(reference, this::makeEntry);
         entry.update(change);

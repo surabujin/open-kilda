@@ -113,7 +113,7 @@ public class NetworkBfdLogicalPortServiceTest {
 
         // proxy disable
         service.disable(physical);
-        verify(carrier).disableSession(eq(physical));
+        verify(carrier).disableSession(eq(logical));
         verifyNoMoreInteractions(carrier);
         reset(carrier);
 
@@ -151,7 +151,7 @@ public class NetworkBfdLogicalPortServiceTest {
         reset(carrier);
 
         service.apply(physical, reference, propertiesDisabled);
-        verify(carrier).disableSession(eq(physical));
+        verify(carrier).disableSession(eq(logical));
     }
 
     @Test

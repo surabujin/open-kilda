@@ -83,6 +83,9 @@ public class NetworkBfdSessionService {
         lookupController(logical).speakerResponse(key);
     }
 
+    /**
+     * Handle BFD controller complete notification.
+     */
     public void sessionCompleteNotification(Endpoint physical) {
         BfdSessionController controller = controllerByEndpoint.remove(physical);
         if (controller != null) {

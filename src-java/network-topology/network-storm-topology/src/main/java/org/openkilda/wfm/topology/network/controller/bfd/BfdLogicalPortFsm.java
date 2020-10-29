@@ -102,7 +102,9 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
         online = isOnline;
 
         BfdLogicalPortFsmContext context = BfdLogicalPortFsmContext.builder().build();
-        BfdLogicalPortFsmFactory.EXECUTOR.fire(this, isOnline ? Event.ONLINE : Event.OFFLINE, context);
+        if (! isTerminated()) {
+            BfdLogicalPortFsmFactory.EXECUTOR.fire(this, isOnline ? Event.ONLINE : Event.OFFLINE, context);
+        }
     }
 
     public Endpoint getLogicalEndpoint() {
@@ -370,7 +372,8 @@ public class BfdLogicalPortFsm extends AbstractBaseFsm<BfdLogicalPortFsm, State,
                 SwitchOnlineStatusMonitor switchOnlineStatusMonitor, Endpoint physicalEndpoint, int logicalPortNumber) {
             BfdLogicalPortFsm fsm = builder.newStateMachine(
                     State.ENTER, carrier, switchOnlineStatusMonitor, physicalEndpoint, logicalPortNumber);
-            fsm.start();
+            fsm.start(BfdLogicalPortFsmContext.builder().build());
+
             // FIXME - DEBUG!
             new StateMachineLogger(fsm).startLogging();
             // FIXME - DEBUG!

@@ -19,26 +19,27 @@ import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmContext;
 import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.Event;
+import org.openkilda.wfm.topology.network.model.BfdSessionData;
 import org.openkilda.wfm.topology.network.service.IBfdSessionCarrier;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class BfdSessionDummy implements BfdSessionManager {
-    private final IBfdSessionCarrier carrier;
+    private final BfdSessionFsm.BfdSessionFsmFactory factory;
 
     private final Endpoint logical;
     private final int physicalPortNumber;
 
-    public BfdSessionDummy(IBfdSessionCarrier carrier, Endpoint logical, int physicalPortNumber) {
-        this.carrier = carrier;
+    public BfdSessionDummy(BfdSessionFsm.BfdSessionFsmFactory factory, Endpoint logical, int physicalPortNumber) {
+        this.factory = factory;
         this.logical = logical;
         this.physicalPortNumber = physicalPortNumber;
     }
 
     @Override
-    public void disableIfConfigured() {
-        throw new IllegalStateException("Must never be called");
+    public BfdSessionManager rotate(BfdSessionBlank sessionBlank) {
+        return factory.produce(sessionBlank);
     }
 
     @Override
@@ -57,12 +58,12 @@ public class BfdSessionDummy implements BfdSessionManager {
     }
 
     @Override
-    public void fire(Event event) {
+    public void handle(Event event) {
         reportMissingManger(String.format("fire(%s)", event));
     }
 
     @Override
-    public void fire(Event event, BfdSessionFsmContext context) {
+    public void handle(Event event, BfdSessionFsmContext context) {
         reportMissingManger(String.format("fire(%s, %s)", event, context));
     }
 
@@ -77,6 +78,6 @@ public class BfdSessionDummy implements BfdSessionManager {
     }
 
     private void emitCompleteNotification() {
-        carrier.sessionCompleteNotification(Endpoint.of(logical.getDatapath(), physicalPortNumber));
+        factory.getCarrier().sessionCompleteNotification(Endpoint.of(logical.getDatapath(), physicalPortNumber));
     }
 }
