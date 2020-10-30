@@ -17,12 +17,13 @@ package org.openkilda.wfm.topology.network.controller.bfd;
 
 import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
 import org.openkilda.wfm.share.model.Endpoint;
-import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.Event;
 import org.openkilda.wfm.topology.network.model.BfdSessionData;
 import org.openkilda.wfm.topology.network.utils.SwitchOnlineStatusListener;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class BfdSessionController implements SwitchOnlineStatusListener {
     private final BfdSessionFsm.BfdSessionFsmFactory fsmFactory;
 
@@ -50,8 +51,14 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
         rotate();
     }
 
+    /**
+     * Handle BFD session disable/remove request.
+     */
     public void disable() {
-        manager.handle(Event.DISABLE);
+        sessionData = null;
+        if (manager.disable()) {
+            rotate();
+        }
     }
 
     public void speakerResponse(String key) {
@@ -65,14 +72,8 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
     /**
      * Handle manager's complete notification - cleanup resource, do mangers rotation.
      */
-    public void handleCompleteNotification(BfdSessionData session, boolean isSuccess) {
+    public void handleCompleteNotification() {
         manager = new BfdSessionDummy(fsmFactory, logical, physicalPortNumber);
-
-        if (! isSuccess && sessionData == null) {
-            sessionData = session;
-            return;
-        }
-
         rotate();
     }
 
@@ -89,9 +90,16 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
             return;
         }
 
-        manager = manager.rotate(new BfdSessionBlank(this, logical, physicalPortNumber, sessionData));
-        if (manager.enableIfReady()) {
-            sessionData = null;
+        if (! manager.isOperationalAndEqualTo(sessionData)) {
+            if (manager.disable()) {
+                manager = fsmFactory.produce(new BfdSessionBlank(this, logical, physicalPortNumber, sessionData));
+                log.info("Rotate existing BFD session on {}, new configuration: {}", logical, sessionData);
+            } else {
+                log.info("Initiate BFD session termination on {}", logical);
+            }
+        } else {
+            log.info("The existing BFD session on {} is operational and uses the same configuration as requested, no "
+                    + "need to rotate. (configuration: {})", logical, sessionData);
         }
     }
 

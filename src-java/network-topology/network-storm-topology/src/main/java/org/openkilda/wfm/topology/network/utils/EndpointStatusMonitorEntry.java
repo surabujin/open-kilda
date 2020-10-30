@@ -19,7 +19,7 @@ import org.openkilda.wfm.topology.network.model.LinkStatus;
 
 public class EndpointStatusMonitorEntry extends BaseMonitorEntry<EndpointStatusListener, LinkStatus> {
     public EndpointStatusMonitorEntry() {
-        super(LinkStatus.DOWN);
+        super(false, LinkStatus.DOWN);
     }
 
     @Override

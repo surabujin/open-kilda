@@ -3,7 +3,6 @@ Internal data
 * BFD descriptor
 * effective properties
 * action
-* error flag
 
 Internal signals
 * action-success
@@ -68,9 +67,12 @@ state ACTIVE {
     DOWN : enter / emit bfd-down
 }
 ACTIVE --> REMOVING : disable
-ACTIVE : offline / emit bfd-kill
-ACTIVE : offline / clean port status transitions
+ACTIVE --> OFFLINE : offline
 ACTIVE : exit / emit bfd-kill
+
+OFFLINE : enter / clean port status transitions
+OFFLINE --> ACTIVE : online
+OFFLINE --> REMOVING : disable
 
 REMOVING : enter / [isOnline] make BFD-remove action
 REMOVING --> HOUSEKEEPING : action-success
@@ -78,7 +80,6 @@ REMOVING : action-fail / emit bfd-fail
 REMOVING : online / make BFD-remove action
 REMOVING : disable / [isOnline] make BFD-remove action
 
-ERROR : enter / raise error flag
 ERROR : enter / emit bfd-fail
 ERROR --> HOUSEKEEPING : next
 

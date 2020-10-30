@@ -82,8 +82,6 @@ public final class BfdSessionFsm
     private boolean online;
     private LinkStatus endpointStatus;
 
-    private boolean error;
-
     public static BfdSessionFsmFactory factory(
             PersistenceManager persistenceManager, SwitchOnlineStatusMonitor switchOnlineStatusMonitor,
             EndpointStatusMonitor endpointStatusMonitor, IBfdSessionCarrier carrier) {
@@ -111,24 +109,19 @@ public final class BfdSessionFsm
     // -- external API --
 
     @Override
-    public BfdSessionManager rotate(BfdSessionBlank sessionBlank) {
-        if (getSubStatesOn(State.ACTIVE).contains(getCurrentState())
-                && sessionBlank.getProperties().equals(properties)) {
-            return this;
+    public boolean isOperationalAndEqualTo(BfdSessionData goal) {
+        switch (getCurrentState()) {
+            case ACTIVE:
+            case WAIT_STATUS:
+            case UP:
+            case DOWN:
+            case OFFLINE:
+                BfdSessionData effective = new BfdSessionData(sessionBlank.getIslReference(), properties);
+                return effective.equals(goal);
+
+            default:
+                return false;
         }
-
-        handle(Event.DISABLE);
-        return this;
-    }
-
-    @Override
-    public boolean enableIfReady() {
-        if (getCurrentState() != State.ENTER) {
-            return false;
-        }
-
-        handle(Event.ENABLE);
-        return true;
     }
 
     @Override
@@ -142,6 +135,15 @@ public final class BfdSessionFsm
             action.consumeSpeakerResponse(key, response)
                     .ifPresent(result -> handleActionResult(result, response));
         }
+    }
+
+    @Override
+    public boolean disable() {
+        if (! isTerminated()) {
+            handle(Event.DISABLE);
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -160,12 +162,10 @@ public final class BfdSessionFsm
         }
     }
 
-    @Override
     public void handle(Event event) {
         handle(event, BfdSessionFsmContext.builder().build());
     }
 
-    @Override
     public void handle(Event event, BfdSessionFsmContext context) {
         BfdSessionFsmFactory.EXECUTOR.fire(this, event, context);
     }
@@ -192,7 +192,7 @@ public final class BfdSessionFsm
     public void sendSessionCreateRequestAction(State from, State to, Event event, BfdSessionFsmContext context) {
         Optional<BfdDescriptor> descriptor = makeSessionDescriptor(context);
         if (descriptor.isPresent()) {
-            action = new BfdSessionRemoveAction(carrier, makeBfdSessionRecord(descriptor.get()));
+            action = new BfdSessionCreateAction(carrier, makeBfdSessionRecord(descriptor.get()));
             fire(Event.READY, context);
         }
     }
@@ -206,14 +206,13 @@ public final class BfdSessionFsm
         saveEffectiveProperties();
     }
 
-    public void offlineIntoActiveAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        carrier.bfdKillNotification(sessionBlank.getPhysicalEndpoint());
-        endpointStatus = null;
-    }
-
     public void activeExitAction(State from, State to, Event event, BfdSessionFsmContext context) {
         logInfo("notify consumer(s) to STOP react on BFD event");
         carrier.bfdKillNotification(sessionBlank.getPhysicalEndpoint());
+    }
+
+    public void offlineEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
+        endpointStatus = null;
     }
 
     public void waitStatusEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
@@ -245,7 +244,6 @@ public final class BfdSessionFsm
     }
 
     public void errorEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        error = true;
         emitBfdFail();
     }
 
@@ -254,7 +252,7 @@ public final class BfdSessionFsm
     }
 
     public void stopEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        sessionBlank.completeNotification(! error);
+        sessionBlank.completeNotification();
     }
 
     // -- private/service methods --
@@ -376,6 +374,7 @@ public final class BfdSessionFsm
         Optional<BfdSession> session = loadBfdSession();
         if (session.isPresent()) {
             BfdSession dbView = session.get();
+            logInfo("save effective session properties {}", properties);
             dbView.setInterval(properties.getInterval());
             dbView.setMultiplier(properties.getMultiplier());
         } else {
@@ -547,9 +546,8 @@ public final class BfdSessionFsm
                     .callMethod("activeEnterAction");
             builder.transition()
                     .from(State.ACTIVE).to(State.REMOVING).on(Event.DISABLE);
-            builder.internalTransition()
-                    .within(State.ACTIVE).on(Event.OFFLINE)
-                    .callMethod("offlineIntoActiveAction");
+            builder.transition()
+                    .from(State.ACTIVE).to(State.OFFLINE).on(Event.OFFLINE);
             builder.onExit(State.ACTIVE)
                     .callMethod("activeExitAction");
 
@@ -576,6 +574,14 @@ public final class BfdSessionFsm
                     .from(State.DOWN).to(State.UP).on(Event.PORT_UP);
             builder.onEntry(State.DOWN)
                     .callMethod("downEnterAction");
+
+            // OFFLINE
+            builder.onEntry(State.OFFLINE)
+                    .callMethod("offlineEnterAction");
+            builder.transition()
+                    .from(State.OFFLINE).to(State.ACTIVE).on(Event.ONLINE);
+            builder.transition()
+                    .from(State.OFFLINE).to(State.REMOVING).on(Event.DISABLE);
 
             // REMOVING
             builder.onEntry(State.REMOVING)
@@ -615,7 +621,9 @@ public final class BfdSessionFsm
                     State.ENTER, persistenceManager, switchOnlineStatusMonitor, endpointStatusMonitor, carrier,
                     sessionBlank);
             entity.start(BfdSessionFsmContext.builder().build());
+
             entity.disableIfConfigured();
+            entity.handle(Event.ENABLE);
 
             // FIXME - DEBUG!
             new StateMachineLogger(entity).startLogging();
@@ -646,6 +654,7 @@ public final class BfdSessionFsm
         PREPARE,
         CREATING,
         ACTIVE, WAIT_STATUS, UP, DOWN,
+        OFFLINE,
         REMOVING,
         ERROR,
         HOUSEKEEPING,

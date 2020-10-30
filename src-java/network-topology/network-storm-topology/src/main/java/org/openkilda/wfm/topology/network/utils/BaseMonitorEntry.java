@@ -27,11 +27,18 @@ import java.util.Objects;
 abstract class BaseMonitorEntry<L, S> {
     protected final List<WeakReference<L>> subscribers = new LinkedList<>();
 
+    private final boolean filterOutEqualStatusUpdates;
+
     @Getter
     @NonNull
     protected S status;
 
     public BaseMonitorEntry(@NonNull S status) {
+        this(true, status);
+    }
+
+    public BaseMonitorEntry(boolean filterOutEqualStatusUpdates, @NonNull S status) {
+        this.filterOutEqualStatusUpdates = filterOutEqualStatusUpdates;
         this.status = status;
     }
 
@@ -41,7 +48,7 @@ abstract class BaseMonitorEntry<L, S> {
     }
 
     void update(@NonNull S change) {
-        if (Objects.equals(status, change)) {
+        if (filterOutEqualStatusUpdates && Objects.equals(status, change)) {
             return;
         }
 

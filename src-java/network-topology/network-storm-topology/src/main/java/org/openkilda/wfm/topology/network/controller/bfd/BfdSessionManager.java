@@ -16,22 +16,16 @@
 package org.openkilda.wfm.topology.network.controller.bfd;
 
 import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
-import org.openkilda.model.BfdProperties;
-import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmContext;
 import org.openkilda.wfm.topology.network.model.BfdSessionData;
 
 public interface BfdSessionManager {
-    BfdSessionManager rotate(BfdSessionBlank sessionBlank);
-
-    boolean enableIfReady();
+    boolean isOperationalAndEqualTo(BfdSessionData sessionData);
 
     void speakerResponse(String key);
 
     void speakerResponse(String key, BfdSessionResponse response);
 
-    void handle(BfdSessionFsm.Event event);
-
-    void handle(BfdSessionFsm.Event event, BfdSessionFsmContext context);
+    boolean disable();
 
     boolean isDummy();
 }

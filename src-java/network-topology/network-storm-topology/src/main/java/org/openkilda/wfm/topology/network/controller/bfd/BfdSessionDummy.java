@@ -17,10 +17,7 @@ package org.openkilda.wfm.topology.network.controller.bfd;
 
 import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
 import org.openkilda.wfm.share.model.Endpoint;
-import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.BfdSessionFsmContext;
-import org.openkilda.wfm.topology.network.controller.bfd.BfdSessionFsm.Event;
 import org.openkilda.wfm.topology.network.model.BfdSessionData;
-import org.openkilda.wfm.topology.network.service.IBfdSessionCarrier;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,13 +35,8 @@ public class BfdSessionDummy implements BfdSessionManager {
     }
 
     @Override
-    public BfdSessionManager rotate(BfdSessionBlank sessionBlank) {
-        return factory.produce(sessionBlank);
-    }
-
-    @Override
-    public boolean enableIfReady() {
-        throw new IllegalStateException("Must never be called");
+    public boolean isOperationalAndEqualTo(BfdSessionData sessionData) {
+        return false;
     }
 
     @Override
@@ -58,13 +50,8 @@ public class BfdSessionDummy implements BfdSessionManager {
     }
 
     @Override
-    public void handle(Event event) {
-        reportMissingManger(String.format("fire(%s)", event));
-    }
-
-    @Override
-    public void handle(Event event, BfdSessionFsmContext context) {
-        reportMissingManger(String.format("fire(%s, %s)", event, context));
+    public boolean disable() {
+        return true;
     }
 
     @Override
