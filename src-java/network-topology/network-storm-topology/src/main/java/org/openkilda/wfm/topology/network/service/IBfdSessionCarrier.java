@@ -23,6 +23,8 @@ public interface IBfdSessionCarrier {
 
     String sendWorkerBfdSessionDeleteRequest(NoviBfdSession bfdSession);
 
+    void sessionRotateRequest(Endpoint logical, boolean error);
+
     void sessionCompleteNotification(Endpoint physical);
 
     void bfdUpNotification(Endpoint physical);

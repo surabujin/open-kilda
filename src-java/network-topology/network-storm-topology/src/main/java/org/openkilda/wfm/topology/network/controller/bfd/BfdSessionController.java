@@ -94,7 +94,7 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
 
         if (! manager.isOperationalAndEqualTo(sessionData)) {
             if (manager.disable()) {
-                manager = fsmFactory.produce(new BfdSessionBlank(this, logical, physicalPortNumber, sessionData));
+                manager = fsmFactory.produce(logical, physicalPortNumber, sessionData);
                 log.info("Rotate existing BFD session on {}, new configuration: {}", logical, sessionData);
             } else {
                 log.info("Initiate BFD session termination on {}", logical);

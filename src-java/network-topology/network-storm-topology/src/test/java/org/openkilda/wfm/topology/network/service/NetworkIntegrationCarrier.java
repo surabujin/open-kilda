@@ -185,6 +185,11 @@ public class NetworkIntegrationCarrier
     }
 
     @Override
+    public void sessionRotateRequest(Endpoint logical, boolean error) {
+        bfdSessionService.rotate(logical, error);
+    }
+
+    @Override
     public void sessionCompleteNotification(Endpoint physical) {
         bfdLogicalPortService.sessionCompleteNotification(physical);
     }

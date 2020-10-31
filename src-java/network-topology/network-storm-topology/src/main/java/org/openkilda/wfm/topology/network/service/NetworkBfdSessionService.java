@@ -83,6 +83,11 @@ public class NetworkBfdSessionService {
         lookupController(logical).speakerResponse(key);
     }
 
+    public void rotate(Endpoint logical, boolean error) {
+        log.debug("BFD-session service rotate request for {} (logical) error:{}", logical, error);
+        lookupController(logical).handleCompleteNotification(error);
+    }
+
     /**
      * Handle BFD controller complete notification.
      */

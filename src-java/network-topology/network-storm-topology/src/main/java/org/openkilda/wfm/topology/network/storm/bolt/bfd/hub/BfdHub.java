@@ -199,6 +199,10 @@ public class BfdHub extends AbstractBolt
         return requestId;
     }
 
+    public void sessionRotateRequest(Endpoint logical, boolean error) {
+        sessionService.rotate(logical, error);
+    }
+
     public void sessionCompleteNotification(Endpoint physical) {
         sessionService.sessionCompleteNotification(physical);
         logicalPortService.sessionCompleteNotification(physical);

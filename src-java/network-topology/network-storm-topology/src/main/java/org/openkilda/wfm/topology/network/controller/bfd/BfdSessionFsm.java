@@ -72,7 +72,9 @@ public final class BfdSessionFsm
 
     private final IBfdSessionCarrier carrier;
 
-    private final BfdSessionBlank sessionBlank;
+    private final Endpoint logicalEndpoint;
+    private final int physicalPortNumber;
+    private final BfdSessionData sessionData;
 
     private BfdProperties properties;
     private Integer discriminator;
@@ -91,7 +93,7 @@ public final class BfdSessionFsm
     public BfdSessionFsm(
             PersistenceManager persistenceManager,
             SwitchOnlineStatusMonitor switchOnlineStatusMonitor, EndpointStatusMonitor endpointStatusMonitor,
-            IBfdSessionCarrier carrier, BfdSessionBlank sessionBlank) {
+            IBfdSessionCarrier carrier, Endpoint logical, Integer physicalPortNumber, BfdSessionData sessionData) {
         transactionManager = persistenceManager.getTransactionManager();
 
         RepositoryFactory repositoryFactory = persistenceManager.getRepositoryFactory();
@@ -99,9 +101,11 @@ public final class BfdSessionFsm
         this.bfdSessionRepository = repositoryFactory.createBfdSessionRepository();
 
         this.carrier = carrier;
-        this.sessionBlank = sessionBlank;
 
-        Endpoint logical = sessionBlank.getLogicalEndpoint();
+        this.logicalEndpoint = logical;
+        this.physicalPortNumber = physicalPortNumber;
+        this.sessionData = sessionData;
+
         online = switchOnlineStatusMonitor.subscribe(logical.getDatapath(), this);
         endpointStatus = endpointStatusMonitor.subscribe(logical, this);
     }
@@ -116,7 +120,7 @@ public final class BfdSessionFsm
             case UP:
             case DOWN:
             case OFFLINE:
-                BfdSessionData effective = new BfdSessionData(sessionBlank.getIslReference(), properties);
+                BfdSessionData effective = new BfdSessionData(sessionData.getReference(), properties);
                 return effective.equals(goal);
 
             default:
@@ -208,7 +212,7 @@ public final class BfdSessionFsm
 
     public void activeExitAction(State from, State to, Event event, BfdSessionFsmContext context) {
         logInfo("notify consumer(s) to STOP react on BFD event");
-        carrier.bfdKillNotification(sessionBlank.getPhysicalEndpoint());
+        carrier.bfdKillNotification(getPhysicalEndpoint());
     }
 
     public void offlineEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
@@ -223,12 +227,12 @@ public final class BfdSessionFsm
 
     public void upEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
         logInfo("LINK detected");
-        carrier.bfdUpNotification(sessionBlank.getPhysicalEndpoint());
+        carrier.bfdUpNotification(getPhysicalEndpoint());
     }
 
     public void downEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
         logInfo("LINK corrupted");
-        carrier.bfdDownNotification(sessionBlank.getPhysicalEndpoint());
+        carrier.bfdDownNotification(getPhysicalEndpoint());
     }
 
     public void removingEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
@@ -253,7 +257,7 @@ public final class BfdSessionFsm
     }
 
     public void stopEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        sessionBlank.completeNotification(error);
+        carrier.sessionRotateRequest(logicalEndpoint, error);
     }
 
     // -- private/service methods --
@@ -288,12 +292,12 @@ public final class BfdSessionFsm
             throw new IllegalStateException(makeLogPrefix() + " there is no allocated discriminator");
         }
 
-        BfdProperties effectiveProperties = properties != null ? properties : sessionBlank.getProperties();
+        BfdProperties effectiveProperties = properties != null ? properties : sessionData.getProperties();
         return NoviBfdSession.builder()
                 .target(descriptor.getLocal())
                 .remote(descriptor.getRemote())
-                .physicalPortNumber(sessionBlank.getPhysicalPortNumber())
-                .logicalPortNumber(sessionBlank.getLogicalEndpoint().getPortNumber())
+                .physicalPortNumber(physicalPortNumber)
+                .logicalPortNumber(logicalEndpoint.getPortNumber())
                 .udpPortNumber(BFD_UDP_PORT)
                 .discriminator(discriminator)
                 .keepOverDisconnect(true)
@@ -321,9 +325,6 @@ public final class BfdSessionFsm
     }
 
     private Integer allocateDiscriminator(BfdDescriptor descriptor, BfdSession bfdSession) {
-        final Endpoint logical = sessionBlank.getLogicalEndpoint();
-        final int physicalPortNumber = sessionBlank.getPhysicalPortNumber();
-
         if (bfdSession != null && bfdSession.getDiscriminator() != null) {
             return bfdSession.getDiscriminator();
         }
@@ -335,8 +336,8 @@ public final class BfdSessionFsm
             descriptor.fill(bfdSession);
         } else {
             bfdSession = BfdSession.builder()
-                    .switchId(logical.getDatapath())
-                    .port(logical.getPortNumber())
+                    .switchId(logicalEndpoint.getDatapath())
+                    .port(logicalEndpoint.getPortNumber())
                     .physicalPort(physicalPortNumber)
                     .discriminator(attempt)
                     .build();
@@ -352,11 +353,8 @@ public final class BfdSessionFsm
             return;
         }
 
-        final Endpoint logical = sessionBlank.getLogicalEndpoint();
         transactionManager.doInTransaction(() -> {
-            bfdSessionRepository
-                    .findBySwitchIdAndPort(logical.getDatapath(), logical.getPortNumber())
-                    .ifPresent(this::releaseDiscriminator);
+            loadBfdSession().ifPresent(this::releaseDiscriminator);
         });
     }
 
@@ -367,7 +365,7 @@ public final class BfdSessionFsm
     }
 
     private void saveEffectiveProperties() {
-        properties = sessionBlank.getProperties();
+        properties = sessionData.getProperties();
         transactionManager.doInTransaction(this::saveEffectivePropertiesTransaction);
     }
 
@@ -384,9 +382,8 @@ public final class BfdSessionFsm
     }
 
     private Optional<BfdSession> loadBfdSession() {
-        final Endpoint logical = sessionBlank.getLogicalEndpoint();
         return bfdSessionRepository.findBySwitchIdAndPort(
-                logical.getDatapath(), logical.getPortNumber());
+                logicalEndpoint.getDatapath(), logicalEndpoint.getPortNumber());
     }
 
     private Optional<BfdDescriptor> makeSessionDescriptor(BfdSessionFsmContext context) {
@@ -402,9 +399,9 @@ public final class BfdSessionFsm
     }
 
     private BfdDescriptor makeSessionDescriptor() throws SwitchReferenceLookupException {
-        Endpoint remoteEndpoint = sessionBlank.getIslReference().getOpposite(sessionBlank.getPhysicalEndpoint());
+        Endpoint remoteEndpoint = sessionData.getReference().getOpposite(getPhysicalEndpoint());
         return BfdDescriptor.builder()
-                .local(makeSwitchReference(sessionBlank.getSwitchId()))
+                .local(makeSwitchReference(logicalEndpoint.getDatapath()))
                 .remote(makeSwitchReference(remoteEndpoint.getDatapath()))
                 .build();
     }
@@ -416,7 +413,7 @@ public final class BfdSessionFsm
     }
 
     private void emitBfdFail() {
-        carrier.bfdFailNotification(sessionBlank.getPhysicalEndpoint());
+        carrier.bfdFailNotification(getPhysicalEndpoint());
     }
 
     private void handleActionResult(BfdSessionAction.ActionResult result, BfdSessionResponse response) {
@@ -442,6 +439,10 @@ public final class BfdSessionFsm
         } else {
             logError(String.format("%s with error %s", prefix, result.getErrorCode()));
         }
+    }
+
+    private Endpoint getPhysicalEndpoint() {
+        return Endpoint.of(logicalEndpoint.getDatapath(), physicalPortNumber);
     }
 
     private Event mapEndpointStatusToEvent(LinkStatus status) {
@@ -475,9 +476,7 @@ public final class BfdSessionFsm
     }
 
     private String makeLogPrefix() {
-        return String.format(
-                "BFD session %s(physical-port:%s)",
-                sessionBlank.getLogicalEndpoint(), sessionBlank.getPhysicalPortNumber());
+        return String.format("BFD session %s(physical-port:%s)", logicalEndpoint, physicalPortNumber);
     }
 
     public static class BfdSessionFsmFactory {
@@ -506,7 +505,7 @@ public final class BfdSessionFsm
                     BfdSessionFsm.class, State.class, Event.class, BfdSessionFsmContext.class,
                     // extra parameters
                     PersistenceManager.class, SwitchOnlineStatusMonitor.class, EndpointStatusMonitor.class,
-                    IBfdSessionCarrier.class, BfdSessionBlank.class);
+                    IBfdSessionCarrier.class, Endpoint.class, Integer.class, BfdSessionData.class);
 
             final String sessionRemoveAction = "sessionRemoveAction";
             final String emitBfdFailAction = "emitBfdFailAction";
@@ -617,10 +616,10 @@ public final class BfdSessionFsm
             builder.defineFinalState(State.STOP);
         }
 
-        public BfdSessionFsm produce(BfdSessionBlank sessionBlank) {
+        public BfdSessionFsm produce(Endpoint logical, Integer physicalPortNumber, BfdSessionData sessionData) {
             BfdSessionFsm entity = builder.newStateMachine(
                     State.ENTER, persistenceManager, switchOnlineStatusMonitor, endpointStatusMonitor, carrier,
-                    sessionBlank);
+                    logical, physicalPortNumber, sessionData);
             entity.start(BfdSessionFsmContext.builder().build());
 
             entity.disableIfConfigured();
