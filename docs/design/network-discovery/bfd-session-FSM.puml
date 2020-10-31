@@ -3,6 +3,7 @@ Internal data
 * BFD descriptor
 * effective properties
 * action
+* error flag
 
 Internal signals
 * action-success
@@ -80,6 +81,7 @@ REMOVING : action-fail / emit bfd-fail
 REMOVING : online / make BFD-remove action
 REMOVING : disable / [isOnline] make BFD-remove action
 
+ERROR : enter / raise error flag
 ERROR : enter / emit bfd-fail
 ERROR --> HOUSEKEEPING : next
 

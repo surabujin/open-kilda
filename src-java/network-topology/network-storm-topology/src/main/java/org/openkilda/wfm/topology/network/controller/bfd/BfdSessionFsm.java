@@ -78,7 +78,7 @@ public final class BfdSessionFsm
     private Integer discriminator;
 
     private BfdSessionAction action = null;
-
+    private boolean error = false;
     private boolean online;
     private LinkStatus endpointStatus;
 
@@ -244,6 +244,7 @@ public final class BfdSessionFsm
     }
 
     public void errorEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
+        error = true;
         emitBfdFail();
     }
 
@@ -252,7 +253,7 @@ public final class BfdSessionFsm
     }
 
     public void stopEnterAction(State from, State to, Event event, BfdSessionFsmContext context) {
-        sessionBlank.completeNotification();
+        sessionBlank.completeNotification(error);
     }
 
     // -- private/service methods --

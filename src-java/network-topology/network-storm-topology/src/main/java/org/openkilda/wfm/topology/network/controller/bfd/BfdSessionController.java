@@ -72,9 +72,11 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
     /**
      * Handle manager's complete notification - cleanup resource, do mangers rotation.
      */
-    public void handleCompleteNotification() {
+    public void handleCompleteNotification(boolean error) {
         manager = new BfdSessionDummy(fsmFactory, logical, physicalPortNumber);
-        rotate();
+        if (! error) {
+            rotate();
+        } // in case of error new attempt will be done on explicit enable request or on switch offline-to-online event
     }
 
     @Override

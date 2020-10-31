@@ -44,8 +44,8 @@ public class BfdSessionBlank {
         this.sessionData = sessionData;
     }
 
-    public void completeNotification() {
-        controller.handleCompleteNotification();
+    public void completeNotification(boolean error) {
+        controller.handleCompleteNotification(error);
     }
 
     public SwitchId getSwitchId() {
