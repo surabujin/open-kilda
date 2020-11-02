@@ -18,18 +18,19 @@ package org.openkilda.wfm.topology.network.controller.bfd;
 import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
 import org.openkilda.wfm.share.model.Endpoint;
 import org.openkilda.wfm.topology.network.model.BfdSessionData;
+import org.openkilda.wfm.topology.network.service.IBfdSessionCarrier;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class BfdSessionDummy implements BfdSessionManager {
-    private final BfdSessionFsm.BfdSessionFsmFactory factory;
+    private final IBfdSessionCarrier carrier;
 
     private final Endpoint logical;
     private final int physicalPortNumber;
 
-    public BfdSessionDummy(BfdSessionFsm.BfdSessionFsmFactory factory, Endpoint logical, int physicalPortNumber) {
-        this.factory = factory;
+    public BfdSessionDummy(IBfdSessionCarrier carrier, Endpoint logical, int physicalPortNumber) {
+        this.carrier = carrier;
         this.logical = logical;
         this.physicalPortNumber = physicalPortNumber;
     }
@@ -65,6 +66,6 @@ public class BfdSessionDummy implements BfdSessionManager {
     }
 
     private void emitCompleteNotification() {
-        factory.getCarrier().sessionCompleteNotification(Endpoint.of(logical.getDatapath(), physicalPortNumber));
+        carrier.sessionCompleteNotification(Endpoint.of(logical.getDatapath(), physicalPortNumber));
     }
 }

@@ -41,7 +41,7 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
         this.logical = logical;
         this.physicalPortNumber = physicalPortNumber;
 
-        manager = new BfdSessionDummy(fsmFactory, logical, physicalPortNumber);
+        manager = new BfdSessionDummy(fsmFactory.getCarrier(), logical, physicalPortNumber);
 
         fsmFactory.getSwitchOnlineStatusMonitor().subscribe(logical.getDatapath(), this);
     }
@@ -73,7 +73,7 @@ public class BfdSessionController implements SwitchOnlineStatusListener {
      * Handle manager's complete notification - cleanup resource, do mangers rotation.
      */
     public void handleCompleteNotification(boolean error) {
-        manager = new BfdSessionDummy(fsmFactory, logical, physicalPortNumber);
+        manager = new BfdSessionDummy(fsmFactory.getCarrier(), logical, physicalPortNumber);
         if (! error) {
             rotate();
         } // in case of error new attempt will be done on explicit enable request or on switch offline-to-online event
