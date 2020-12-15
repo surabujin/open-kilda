@@ -250,8 +250,8 @@ public class SwitchHandler extends AbstractBolt implements ISwitchCarrier {
         service.switchBecomeUnmanaged(datapath);
     }
 
-    public void processSwitchBecomeManaged(SpeakerSwitchView switchView) {
-        service.switchBecomeManaged(switchView);
+    public void processSwitchBecomeManaged(SpeakerSwitchView switchView, String correlationId) {
+        service.switchBecomeManaged(switchView, correlationId);
     }
 
     public void processSwitchAddWithHistory(HistoryFacts history) {

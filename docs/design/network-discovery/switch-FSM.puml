@@ -28,11 +28,13 @@ endlegend
 
 [*] --> INIT
 
-INIT --> OFFLINE : history / setup port workers
+INIT : history / setup port workers
+INIT --> OFFLINE : offline
 INIT --> SYNC : online
 
 SYNC : enter / init attempts count from config
 SYNC : enter / save speaker data
+SYNC : enter / [dump-generation in context] update dump-generation
 SYNC : enter / create or update DB record
 SYNC : enter / save features
 SYNC : sync-response [!sync-ended] / process sync response
@@ -58,6 +60,7 @@ ONLINE : port-del / kill port FSM
 ONLINE : port-up / proxy
 ONLINE : port-down / proxy
 ONLINE : online / update ports status
+ONLINE : online / [dump-generation in context] update dump-generation
 ONLINE --> OFFLINE : offline
 
 OFFLINE : enter / update status in DB
