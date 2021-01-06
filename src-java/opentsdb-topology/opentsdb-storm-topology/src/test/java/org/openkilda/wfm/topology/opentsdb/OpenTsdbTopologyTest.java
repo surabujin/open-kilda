@@ -27,6 +27,7 @@ import org.apache.storm.tuple.Values;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockserver.integration.ClientAndServer;
 import org.mockserver.model.HttpRequest;
@@ -37,6 +38,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
+@Ignore
 public class OpenTsdbTopologyTest extends StableAbstractStormTest {
     private static final long timestamp = System.currentTimeMillis();
     private static ClientAndServer mockServer;

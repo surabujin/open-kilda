@@ -18,3 +18,6 @@ bolts:
   - id: "otsdb-bolt"
     parallelism: {{ getv "/kilda_opentsdb_num_opentsdbbolt" }}
     numTasks: {{ getv "/kilda_opentsdb_workers_opentsdbolt" }}
+  - id: "monitoring"
+    parallelism: 1
+    numTasks: 1
