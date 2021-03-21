@@ -20,6 +20,7 @@ import org.openkilda.messaging.info.event.PortInfoData;
 import org.openkilda.messaging.info.event.SwitchInfoData;
 import org.openkilda.messaging.info.switches.SwitchSyncResponse;
 import org.openkilda.messaging.model.SpeakerSwitchView;
+import org.openkilda.messaging.model.SwitchAvailabilityData;
 import org.openkilda.model.SwitchId;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.wfm.share.utils.FsmExecutor;
@@ -75,21 +76,14 @@ public class NetworkSwitchService {
         controllerExecutor.fire(switchFsm, SwitchFsmEvent.HISTORY, fsmContext);
     }
 
-    /**
-     * .
-     */
+    // TODO: remove
     public void switchEvent(SwitchInfoData payload) {
-        log.info("Switch service receive SWITCH event for {} status:{}", payload.getSwitchId(), payload.getState());
-        SwitchFsmContext.SwitchFsmContextBuilder fsmContextBuilder = SwitchFsmContext.builder(carrier);
-        SwitchFsmEvent event = null;
-
         switch (payload.getState()) {
             case ACTIVATED:
-                event = SwitchFsmEvent.ONLINE;
-                fsmContextBuilder.speakerData(payload.getSwitchView());
+                switchConnect(payload.getSwitchId(), payload.getSwitchView());
                 break;
             case DEACTIVATED:
-                event = SwitchFsmEvent.OFFLINE;
+                switchDisconnect(payload.getSwitchId());
                 break;
 
             default:
@@ -97,11 +91,34 @@ public class NetworkSwitchService {
                         payload.getSwitchId());
                 break;
         }
+    }
 
-        if (event != null) {
-            SwitchFsm fsm = locateControllerCreateIfAbsent(payload.getSwitchId());
-            controllerExecutor.fire(fsm, event, fsmContextBuilder.build());
+    public void switchConnect(SwitchId switchId, SpeakerSwitchView switchView) {
+        switchConnect(switchId, switchView, null);
+    }
+
+    public void switchConnect(
+            SwitchId switchId, SpeakerSwitchView speakerData, SwitchAvailabilityData availabilityData) {
+        log.info("Switch service receive SWITCH CONNECT notification for {}", switchId);
+
+        SwitchFsmContext context = SwitchFsmContext
+                .builder(carrier)
+                .speakerData(speakerData)
+                .build();
+
+        SwitchFsm fsm = locateControllerCreateIfAbsent(switchId);
+        controllerExecutor.fire(fsm, SwitchFsmEvent.ONLINE, context);
+
+        if (availabilityData != null) {
+            // TODO
         }
+    }
+
+    public void switchDisconnect(SwitchId switchId) {
+        log.info("Switch service receive SWITCH DISCONNECT notification for {}", switchId);
+
+        SwitchFsm fsm = locateControllerCreateIfAbsent(switchId);
+        controllerExecutor.fire(fsm, SwitchFsmEvent.OFFLINE, SwitchFsmContext.builder(carrier).build());
     }
 
     /**

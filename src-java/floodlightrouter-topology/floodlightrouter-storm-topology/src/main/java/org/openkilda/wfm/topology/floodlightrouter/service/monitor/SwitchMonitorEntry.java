@@ -20,7 +20,10 @@ import org.openkilda.messaging.info.discovery.NetworkDumpSwitchData;
 import org.openkilda.messaging.info.event.PortInfoData;
 import org.openkilda.messaging.info.event.SwitchInfoData;
 import org.openkilda.messaging.model.SpeakerSwitchView;
+import org.openkilda.messaging.model.SwitchAvailabilityData;
+import org.openkilda.model.SwitchConnectMode;
 import org.openkilda.model.SwitchId;
+import org.openkilda.wfm.topology.floodlightrouter.mapper.SwitchNotificationMapper;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingAdd;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingSet;
 import org.openkilda.wfm.topology.floodlightrouter.model.SwitchAvailabilityEntry;
@@ -70,16 +73,16 @@ public class SwitchMonitorEntry {
     public void handleStatusUpdateNotification(SwitchInfoData notification, String region) {
         switch (notification.getState()) {
             case ADDED:
-                recordAvailability(notification, region, false);
+                processConnectNotification(notification, region, false);
                 break;
             case ACTIVATED:
-                recordAvailability(notification, region, true);
+                processConnectNotification(notification, region, true);
                 break;
             case DEACTIVATED:
-                becomeUnavailable(notification, region, true);
+                processDisconnectNotification(notification, region, true);
                 break;
             case REMOVED:
-                becomeUnavailable(notification, region, false);
+                processDisconnectNotification(notification, region, false);
                 break;
             default:
                 proxyNotification(notification);
@@ -124,7 +127,7 @@ public class SwitchMonitorEntry {
         }
     }
 
-    private void recordAvailability(SwitchInfoData notification, String region, boolean isReadWrite) {
+    private void processConnectNotification(SwitchInfoData notification, String region, boolean isReadWrite) {
         Map<String, SwitchAvailabilityEntry> availabilityMap;
         if (isReadWrite) {
             availabilityMap = availableInReadWrite;
@@ -132,14 +135,13 @@ public class SwitchMonitorEntry {
             availabilityMap = availableInReadOnly;
         }
 
-        if (recordAvailability(availabilityMap, notification, region)) {
+        if (processConnectNotification(availabilityMap, notification, region)) {
             reportBecomeAvailable(availabilityMap.keySet(), region, isReadWrite);
-
-            proxyAvailabilityUpdate(notification, region, isReadWrite);
+            acquireRegion(notification, region, isReadWrite);
         }
     }
 
-    private boolean recordAvailability(
+    private boolean processConnectNotification(
             Map<String, SwitchAvailabilityEntry> availabilityMap, SwitchInfoData notification, String region) {
         SwitchAvailabilityEntry update = makeAvailabilityEntry(notification, availabilityMap.isEmpty());
         SwitchAvailabilityEntry current = availabilityMap.get(region);
@@ -152,33 +154,30 @@ public class SwitchMonitorEntry {
         return current == null;
     }
 
-    private void becomeUnavailable(SwitchInfoData notification, String region, boolean isReadWrite) {
+    private void processDisconnectNotification(SwitchInfoData notification, String region, boolean isReadWrite) {
 
     }
 
     private void acquireRegion(SwitchInfoData notification, String region, boolean isReadWrite) {
-
+        if (isReadWrite) {
+            acquireReadWriteRegion(notification, region);
+        } else {
+            acquireReadOnlyRegion(notification, region);
+        }
     }
 
-    private void emitRegionAddNotification(String region, boolean isReadWrite) {
-        if (! isReadWrite) {
-            carrier.regionUpdateNotification(new RegionMappingAdd(switchId, region, false));
-            return;
-        }
-
+    private void acquireReadWriteRegion(SwitchInfoData notification, String region) {
         if (availableInReadWrite.size() == 1) {
-            carrier.regionUpdateNotification(new RegionMappingSet(switchId, activeRegion, true));
+            carrier.regionUpdateNotification(new RegionMappingSet(switchId, region, true));
         }
-    }
-
-    private void proxyAvailabilityUpdate(SwitchInfoData notification, String region, boolean isReadWrite) {
-        if (! isReadWrite) {
-            reportNotificationDrop(notification, region);
-        }
-
-        // active RW region
 
         // TODO
+    }
+
+    private void acquireReadOnlyRegion(SwitchInfoData notification, String region) {
+        carrier.regionUpdateNotification(new RegionMappingAdd(switchId, region, false));
+        // TODO emit availability update notification
+        reportNotificationDrop(notification, region);
     }
 
     private void proxyNotification(SwitchInfoData notification) {
@@ -235,6 +234,25 @@ public class SwitchMonitorEntry {
         return new SwitchAvailabilityEntry(
                 current.isActive() || update.isActive(), current.getBecomeAvailableAt(),
                 update.getSwitchSocketAddress(), update.getSwitchSocketAddress());
+    }
+
+    private SwitchAvailabilityData makeAvailabilityUpdatePayload() {
+        SwitchAvailabilityData.SwitchAvailabilityDataBuilder builder = SwitchAvailabilityData.builder();
+
+        for (Map.Entry<String, SwitchAvailabilityEntry> entry : availableInReadWrite.entrySet()) {
+            builder.connection(SwitchNotificationMapper.INSTANCE.toMessaging(
+                    entry.getValue(), entry.getKey(), SwitchConnectMode.READ_WRITE));
+        }
+
+        for (Map.Entry<String, SwitchAvailabilityEntry> entry : availableInReadOnly.entrySet()) {
+            if (availableInReadWrite.containsKey(entry.getKey())) {
+                continue;
+            }
+            builder.connection(SwitchNotificationMapper.INSTANCE.toMessaging(
+                    entry.getValue(), entry.getKey(), SwitchConnectMode.READ_ONLY));
+        }
+
+        return builder.build();
     }
 
     private static String formatAvailabilityMode(boolean mode) {
