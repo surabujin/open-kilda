@@ -56,8 +56,6 @@ public class SwitchMonitorEntry {
 
     private final SwitchId switchId;
 
-    private final List<SwitchConnectMonitor> basicMonitors;
-
     private final AvailabilityData readWriteConnects = new AvailabilityData(SwitchConnectMode.READ_WRITE);
 
     private final AvailabilityData readOnlyConnects = new AvailabilityData(SwitchConnectMode.READ_ONLY);
@@ -70,11 +68,6 @@ public class SwitchMonitorEntry {
         this.switchId = switchId;
 
         lastUpdateTime = clock.instant();
-
-        // ---
-        basicMonitors = ImmutableList.of(
-                new SwitchReadOnlyConnectMonitor(carrier, clock, switchId),
-                new SwitchReadWriteConnectMonitor(carrier, clock, switchId));
     }
 
     /**
@@ -101,25 +94,17 @@ public class SwitchMonitorEntry {
         }
 
         lastUpdateTime = clock.instant();
-
-        // TODO - drop below
-        boolean isHandled = false;
-        Iterator<SwitchConnectMonitor> iter = basicMonitors.iterator();
-        while (! isHandled && iter.hasNext()) {
-            isHandled = iter.next().handleSwitchStatusNotification(notification, region);
-        }
-
-        if (! isHandled) {
-            carrier.networkStatusUpdateNotification(notification.getSwitchId(), notification);
-        }
     }
 
     /**
      * Handle region offline notification.
      */
     public void handleRegionOfflineNotification(String region) {
-        for (SwitchConnectMonitor entry : basicMonitors) {
-            entry.handleRegionOfflineNotification(region);
+        for (AvailabilityData connections : new AvailabilityData[] {readOnlyConnects, readWriteConnects}) {
+            SwitchAvailabilityEntry entry = connections.get(region);
+            if (entry != null) {
+                loseRegion(region, entry, connections.getMode());
+            }
         }
     }
 
@@ -231,6 +216,8 @@ public class SwitchMonitorEntry {
             sendAvailabilityUpdateNetworkNotification();
         } else {
             log.info("All {} connection to the switch {} have lost", SwitchConnectMode.READ_WRITE, switchId);
+
+            carrier.regionUpdateNotification(new RegionMappingRemove(switchId, null, true));
             sendDisconnectNetworkNotification();
         }
     }
