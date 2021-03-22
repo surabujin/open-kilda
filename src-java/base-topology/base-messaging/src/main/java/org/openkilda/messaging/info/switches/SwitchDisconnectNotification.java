@@ -16,6 +16,7 @@
 package org.openkilda.messaging.info.switches;
 
 import org.openkilda.messaging.info.InfoData;
+import org.openkilda.messaging.model.SwitchAvailabilityData;
 import org.openkilda.model.SwitchId;
 
 import lombok.EqualsAndHashCode;
@@ -25,4 +26,6 @@ import lombok.Value;
 @EqualsAndHashCode(callSuper = false)
 public class SwitchDisconnectNotification extends InfoData {
     SwitchId switchId;
+
+    SwitchAvailabilityData availabilityData;
 }

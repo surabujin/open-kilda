@@ -19,23 +19,29 @@ import org.openkilda.messaging.info.InfoData;
 import org.openkilda.messaging.info.discovery.NetworkDumpSwitchData;
 import org.openkilda.messaging.info.event.PortInfoData;
 import org.openkilda.messaging.info.event.SwitchInfoData;
+import org.openkilda.messaging.info.switches.SwitchAvailabilityUpdateNotification;
+import org.openkilda.messaging.info.switches.SwitchConnectNotification;
+import org.openkilda.messaging.info.switches.SwitchDisconnectNotification;
 import org.openkilda.messaging.model.SpeakerSwitchView;
 import org.openkilda.messaging.model.SwitchAvailabilityData;
 import org.openkilda.model.SwitchConnectMode;
 import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.topology.floodlightrouter.mapper.SwitchNotificationMapper;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingAdd;
+import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingRemove;
 import org.openkilda.wfm.topology.floodlightrouter.model.RegionMappingSet;
 import org.openkilda.wfm.topology.floodlightrouter.model.SwitchAvailabilityEntry;
 import org.openkilda.wfm.topology.floodlightrouter.service.SwitchMonitorCarrier;
 
 import com.google.common.collect.ImmutableList;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -52,15 +58,19 @@ public class SwitchMonitorEntry {
 
     private final List<SwitchConnectMonitor> basicMonitors;
 
-    private final Map<String, SwitchAvailabilityEntry> availableInReadWrite = new HashMap<>();
+    private final AvailabilityData readWriteConnects = new AvailabilityData(SwitchConnectMode.READ_WRITE);
 
-    private final Map<String, SwitchAvailabilityEntry> availableInReadOnly = new HashMap<>();
+    private final AvailabilityData readOnlyConnects = new AvailabilityData(SwitchConnectMode.READ_ONLY);
+
+    private Instant lastUpdateTime;
 
     public SwitchMonitorEntry(SwitchMonitorCarrier carrier, Clock clock, SwitchId switchId) {
         this.carrier = carrier;
         this.clock = clock;
-
         this.switchId = switchId;
+
+        lastUpdateTime = clock.instant();
+
         // ---
         basicMonitors = ImmutableList.of(
                 new SwitchReadOnlyConnectMonitor(carrier, clock, switchId),
@@ -73,22 +83,26 @@ public class SwitchMonitorEntry {
     public void handleStatusUpdateNotification(SwitchInfoData notification, String region) {
         switch (notification.getState()) {
             case ADDED:
-                processConnectNotification(notification, region, false);
+                processConnectNotification(notification, region, readOnlyConnects);
                 break;
             case ACTIVATED:
-                processConnectNotification(notification, region, true);
+                processConnectNotification(notification, region, readWriteConnects);
                 break;
             case DEACTIVATED:
-                processDisconnectNotification(notification, region, true);
+                processDisconnectNotification(notification, region, readWriteConnects);
                 break;
             case REMOVED:
-                processDisconnectNotification(notification, region, false);
+                processDisconnectNotification(notification, region, readOnlyConnects);
                 break;
             default:
+                log.debug("Proxy switch {} connect/disconnect unrelated notification - {}", switchId, notification);
                 proxyNotification(notification);
+                return;
         }
 
+        lastUpdateTime = clock.instant();
 
+        // TODO - drop below
         boolean isHandled = false;
         Iterator<SwitchConnectMonitor> iter = basicMonitors.iterator();
         while (! isHandled && iter.hasNext()) {
@@ -127,57 +141,113 @@ public class SwitchMonitorEntry {
         }
     }
 
-    private void processConnectNotification(SwitchInfoData notification, String region, boolean isReadWrite) {
-        Map<String, SwitchAvailabilityEntry> availabilityMap;
-        if (isReadWrite) {
-            availabilityMap = availableInReadWrite;
+    private void processConnectNotification(SwitchInfoData notification, String region, AvailabilityData connects) {
+        SwitchAvailabilityEntry update = makeAvailabilityEntry(notification, connects.isEmpty());
+        SwitchAvailabilityEntry current = connects.put(region, update);
+        if (current != null) {
+            connects.put(region, mergeAvailabilityEntries(current, update));
         } else {
-            availabilityMap = availableInReadOnly;
-        }
-
-        if (processConnectNotification(availabilityMap, notification, region)) {
-            reportBecomeAvailable(availabilityMap.keySet(), region, isReadWrite);
-            acquireRegion(notification, region, isReadWrite);
+            acquireRegion(notification, region, update, connects.getMode());
         }
     }
 
-    private boolean processConnectNotification(
-            Map<String, SwitchAvailabilityEntry> availabilityMap, SwitchInfoData notification, String region) {
-        SwitchAvailabilityEntry update = makeAvailabilityEntry(notification, availabilityMap.isEmpty());
-        SwitchAvailabilityEntry current = availabilityMap.get(region);
-        if (current == null) {
-            availabilityMap.put(region, update);
+    private void processDisconnectNotification(SwitchInfoData notification, String region, AvailabilityData connects) {
+        SwitchAvailabilityEntry entry = connects.remove(region);
+        if (entry == null) {
+            log.error(
+                    "Got disconnect notification for {} in region {}, but there is no data about such connect (know "
+                            + "connections: {})",
+                    switchId, region, formatConnections());
+            reportNotificationDrop(notification, region);
+            return;
+        }
+
+        loseRegion(region, entry, connects.getMode());
+    }
+
+    private void acquireRegion(
+            SwitchInfoData notification, String region, SwitchAvailabilityEntry entry, SwitchConnectMode mode) {
+        reportBecomeAvailable(region, mode);
+        if (mode == SwitchConnectMode.READ_WRITE) {
+            acquireReadWriteRegion(notification, region, entry);
         } else {
-            availabilityMap.put(region, mergeAvailabilityEntries(current, update));
+            acquireReadOnlyRegion(region);
         }
-
-        return current == null;
     }
 
-    private void processDisconnectNotification(SwitchInfoData notification, String region, boolean isReadWrite) {
-
-    }
-
-    private void acquireRegion(SwitchInfoData notification, String region, boolean isReadWrite) {
-        if (isReadWrite) {
-            acquireReadWriteRegion(notification, region);
+    private void loseRegion(String region, SwitchAvailabilityEntry entry, SwitchConnectMode mode) {
+        reportBecomeUnavailable(region, mode);
+        if (mode == SwitchConnectMode.READ_WRITE) {
+            loseReadWriteRegion(region, entry);
         } else {
-            acquireReadOnlyRegion(notification, region);
+            loseReadOnlyRegion(region);
         }
     }
 
-    private void acquireReadWriteRegion(SwitchInfoData notification, String region) {
-        if (availableInReadWrite.size() == 1) {
+    private void acquireReadWriteRegion(SwitchInfoData notification, String region, SwitchAvailabilityEntry entry) {
+        if (entry.isActive()) {
+            log.info("Set {} active region for {} to \"{}\"", SwitchConnectMode.READ_WRITE, switchId, region);
             carrier.regionUpdateNotification(new RegionMappingSet(switchId, region, true));
         }
-
-        // TODO
+        sendConnectNetworkNotification(notification);
     }
 
-    private void acquireReadOnlyRegion(SwitchInfoData notification, String region) {
+    private void acquireReadOnlyRegion(String region) {
         carrier.regionUpdateNotification(new RegionMappingAdd(switchId, region, false));
-        // TODO emit availability update notification
-        reportNotificationDrop(notification, region);
+        sendAvailabilityUpdateNetworkNotification();
+    }
+
+    private void loseReadWriteRegion(String region, SwitchAvailabilityEntry entry) {
+        if (entry.isActive()) {
+            swapActiveReadWriteRegion(region);
+        } else {
+            sendAvailabilityUpdateNetworkNotification();
+        }
+    }
+
+    private void loseReadOnlyRegion(String region) {
+        carrier.regionUpdateNotification(new RegionMappingRemove(switchId, region, false));
+        sendAvailabilityUpdateNetworkNotification();
+    }
+
+    private void swapActiveReadWriteRegion(String currentRegion) {
+        Iterator<String> iter = readWriteConnects.listRegions().iterator();
+        if (iter.hasNext()) {
+            String targetRegion = iter.next();
+            log.info(
+                    "Change {} active region for {} from \"{}\" to \"{}\"",
+                    SwitchConnectMode.READ_WRITE, switchId, currentRegion, targetRegion);
+
+            SwitchAvailabilityEntry target = readWriteConnects.get(targetRegion);
+            if (target == null) {
+                // it must never happen, but if it happen better throw something meaningful
+                throw new IllegalStateException(String.format(
+                        "Switch %s availability data for %s corrupted", SwitchConnectMode.READ_WRITE, switchId));
+            }
+
+            readWriteConnects.put(targetRegion, target.makeActive());
+
+            carrier.regionUpdateNotification(new RegionMappingSet(switchId, targetRegion, true));
+            sendAvailabilityUpdateNetworkNotification();
+        } else {
+            log.info("All {} connection to the switch {} have lost", SwitchConnectMode.READ_WRITE, switchId);
+            sendDisconnectNetworkNotification();
+        }
+    }
+
+    private void sendConnectNetworkNotification(SwitchInfoData speakerNotification) {
+        carrier.networkStatusUpdateNotification(switchId, new SwitchConnectNotification(
+                speakerNotification.getSwitchView(), makeAvailabilityUpdatePayload()));
+    }
+
+    private void sendDisconnectNetworkNotification() {
+        carrier.networkStatusUpdateNotification(switchId, new SwitchDisconnectNotification(
+                switchId, makeAvailabilityUpdatePayload()));
+    }
+
+    private void sendAvailabilityUpdateNetworkNotification() {
+        carrier.networkStatusUpdateNotification(
+                switchId, new SwitchAvailabilityUpdateNotification(switchId, makeAvailabilityUpdatePayload()));
     }
 
     private void proxyNotification(SwitchInfoData notification) {
@@ -185,34 +255,13 @@ public class SwitchMonitorEntry {
     }
 
     /**
-     * Merge all basic monitors becomeUnavailableAt values.
+     * Evaluate become unavailable time for garbage collection.
      */
     public Optional<Instant> getBecomeUnavailableAt() {
-        // FIXME
-        Instant result = null;
-        for (SwitchConnectMonitor entry : basicMonitors) {
-            Instant current = entry.getBecomeUnavailableAt();
-            if (entry.isAvailable() || current == null) {
-                return Optional.empty(); // at least one of connections are active
-            }
-
-            if (result == null || result.isBefore(current)) {
-                result = current;
-            }
+        if (readWriteConnects.isEmpty() && readOnlyConnects.isEmpty()) {
+            return Optional.of(lastUpdateTime);
         }
-
-        return Optional.ofNullable(result);
-    }
-
-    private void reportNotificationDrop(InfoData notification, String region) {
-        log.debug("Drop speaker switch {} notification in region {}: {}", switchId, region, notification);
-    }
-
-    protected void reportBecomeAvailable(Set<String> availabilitySet, String region, boolean isReadWrite) {
-        String mode = formatAvailabilityMode(isReadWrite);
-        log.info(
-                "Switch {} become {} available in region \"{}\", all {} regions: {}",
-                switchId, mode, region, mode, formatAvailabilitySet(availabilitySet));
+        return Optional.empty();
     }
 
     private SwitchAvailabilityEntry makeAvailabilityEntry(
@@ -239,29 +288,83 @@ public class SwitchMonitorEntry {
     private SwitchAvailabilityData makeAvailabilityUpdatePayload() {
         SwitchAvailabilityData.SwitchAvailabilityDataBuilder builder = SwitchAvailabilityData.builder();
 
-        for (Map.Entry<String, SwitchAvailabilityEntry> entry : availableInReadWrite.entrySet()) {
+        Set<String> readWriteRegions = new HashSet<>();
+        for (String region : readWriteConnects.listRegions()) {
+            readWriteRegions.add(region);
             builder.connection(SwitchNotificationMapper.INSTANCE.toMessaging(
-                    entry.getValue(), entry.getKey(), SwitchConnectMode.READ_WRITE));
+                    readWriteConnects.get(region), region, SwitchConnectMode.READ_WRITE));
         }
 
-        for (Map.Entry<String, SwitchAvailabilityEntry> entry : availableInReadOnly.entrySet()) {
-            if (availableInReadWrite.containsKey(entry.getKey())) {
+        for (String region : readOnlyConnects.listRegions()) {
+            if (readWriteRegions.contains(region)) {
                 continue;
             }
             builder.connection(SwitchNotificationMapper.INSTANCE.toMessaging(
-                    entry.getValue(), entry.getKey(), SwitchConnectMode.READ_ONLY));
+                    readOnlyConnects.get(region), region, SwitchConnectMode.READ_ONLY));
         }
 
         return builder.build();
     }
 
-    private static String formatAvailabilityMode(boolean mode) {
-        return mode ? "RW" : "RO";
+    private void reportNotificationDrop(InfoData notification, String region) {
+        log.debug("Drop speaker switch {} notification in region {}: {}", switchId, region, notification);
     }
 
-    private static String formatAvailabilitySet(Set<String> availabilitySet) {
-        return "{" + availabilitySet.stream()
+    private void reportBecomeAvailable(String region, SwitchConnectMode mode) {
+        reportAvailabilityUpdate("available", region, mode);
+    }
+
+    private void reportBecomeUnavailable(String region, SwitchConnectMode mode) {
+        reportAvailabilityUpdate("unavailable", region, mode);
+    }
+
+    private void reportAvailabilityUpdate(String become, String region, SwitchConnectMode mode) {
+        log.info(
+                "Switch {} become {} in region \"{}\" in {} mode (all connections {})",
+                switchId, region, become, mode, formatConnections());
+    }
+
+    private String formatConnections() {
+        return String.format(
+                "%s: %s --- %s: %s",
+                SwitchConnectMode.READ_WRITE, formatConnectionsSet(readWriteConnects.listRegions()),
+                SwitchConnectMode.READ_ONLY, formatConnectionsSet(readOnlyConnects.listRegions()));
+    }
+
+    private static String formatConnectionsSet(Set<String> regions) {
+        return "{" + regions.stream()
                 .sorted()
                 .collect(Collectors.joining(", ")) + "}";
+    }
+
+    private static class AvailabilityData {
+        private final Map<String, SwitchAvailabilityEntry> data = new HashMap<>();
+
+        @Getter
+        private final SwitchConnectMode mode;
+
+        AvailabilityData(SwitchConnectMode mode) {
+            this.mode = mode;
+        }
+
+        SwitchAvailabilityEntry put(String region, SwitchAvailabilityEntry entry) {
+            return data.put(region, entry);
+        }
+
+        SwitchAvailabilityEntry get(String region) {
+            return data.get(region);
+        }
+
+        SwitchAvailabilityEntry remove(String region) {
+            return data.remove(region);
+        }
+
+        boolean isEmpty() {
+            return data.isEmpty();
+        }
+
+        Set<String> listRegions() {
+            return data.keySet();
+        }
     }
 }

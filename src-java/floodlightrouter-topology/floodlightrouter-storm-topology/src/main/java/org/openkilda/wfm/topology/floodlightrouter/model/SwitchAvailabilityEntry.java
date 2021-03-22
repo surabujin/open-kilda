@@ -29,4 +29,11 @@ public class SwitchAvailabilityEntry {
     InetSocketAddress switchSocketAddress;
 
     InetSocketAddress speakerSocketAddress;
+
+    public SwitchAvailabilityEntry makeActive() {
+        if (active) {
+            return this;
+        }
+        return new SwitchAvailabilityEntry(true, becomeAvailableAt, switchSocketAddress, speakerSocketAddress);
+    }
 }
