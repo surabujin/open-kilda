@@ -104,7 +104,7 @@ public class SwitchMonitor {
         for (ConnectionsCollection connections : new ConnectionsCollection[] {readOnlyConnects, readWriteConnects}) {
             SwitchConnect entry = connections.get(region);
             if (entry != null) {
-                loseRegion(region, entry, connections.getMode());
+                loseRegion(region, entry, connections.getMode(), true);
             }
         }
     }
@@ -115,6 +115,8 @@ public class SwitchMonitor {
     public void handleNetworkDumpResponse(NetworkDumpSwitchData networkDumpEntry, String region) {
         processConnectNotification(networkDumpEntry.getSwitchView(), region, readOnlyConnects);
         processConnectNotification(networkDumpEntry.getSwitchView(), region, readWriteConnects);
+
+        proxyNotificationIfMasterRegion(networkDumpEntry, region);
     }
 
     /**
@@ -147,7 +149,7 @@ public class SwitchMonitor {
             return;
         }
 
-        loseRegion(region, entry, connects.getMode());
+        loseRegion(region, entry, connects.getMode(), false);
     }
 
     private void acquireRegion(
@@ -160,10 +162,10 @@ public class SwitchMonitor {
         }
     }
 
-    private void loseRegion(String region, SwitchConnect entry, SwitchConnectMode mode) {
+    private void loseRegion(String region, SwitchConnect entry, SwitchConnectMode mode, boolean isRegionOffline) {
         reportBecomeUnavailable(region, mode);
         if (mode == SwitchConnectMode.READ_WRITE) {
-            loseReadWriteRegion(region, entry);
+            loseReadWriteRegion(region, entry, isRegionOffline);
         } else {
             loseReadOnlyRegion(region);
         }
@@ -182,9 +184,9 @@ public class SwitchMonitor {
         sendAvailabilityUpdateNetworkNotification();
     }
 
-    private void loseReadWriteRegion(String region, SwitchConnect entry) {
-        if (entry.isActive()) {
-            swapActiveReadWriteRegion(region);
+    private void loseReadWriteRegion(String region, SwitchConnect connect, boolean isRegionOffline) {
+        if (connect.isActive()) {
+            swapActiveReadWriteRegion(region, isRegionOffline);
         } else {
             sendAvailabilityUpdateNetworkNotification();
         }
@@ -195,7 +197,7 @@ public class SwitchMonitor {
         sendAvailabilityUpdateNetworkNotification();
     }
 
-    private void swapActiveReadWriteRegion(String currentRegion) {
+    private void swapActiveReadWriteRegion(String currentRegion, boolean isRegionOffline) {
         Iterator<String> iter = readWriteConnects.listRegions().iterator();
         if (iter.hasNext()) {
             String targetRegion = iter.next();
@@ -218,7 +220,7 @@ public class SwitchMonitor {
             log.info("All {} connection to the switch {} have lost", SwitchConnectMode.READ_WRITE, switchId);
 
             carrier.regionUpdateNotification(new RegionMappingRemove(switchId, null, true));
-            sendDisconnectNetworkNotification();
+            sendDisconnectNetworkNotification(isRegionOffline);
         }
     }
 
@@ -226,9 +228,9 @@ public class SwitchMonitor {
         carrier.networkStatusUpdateNotification(switchId, new SwitchConnectNotification(speakerData, makeDump()));
     }
 
-    private void sendDisconnectNetworkNotification() {
+    private void sendDisconnectNetworkNotification(boolean isRegionOffline) {
         carrier.networkStatusUpdateNotification(switchId, new SwitchDisconnectNotification(
-                switchId, makeDump()));
+                switchId, makeDump(), isRegionOffline));
     }
 
     private void sendAvailabilityUpdateNetworkNotification() {

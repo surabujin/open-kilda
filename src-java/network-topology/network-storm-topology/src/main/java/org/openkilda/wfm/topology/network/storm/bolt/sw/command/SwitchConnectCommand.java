@@ -1,4 +1,4 @@
-/* Copyright 2019 Telstra Open Source
+/* Copyright 2021 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -15,16 +15,20 @@
 
 package org.openkilda.wfm.topology.network.storm.bolt.sw.command;
 
-import org.openkilda.model.SwitchId;
+import org.openkilda.messaging.info.switches.SwitchConnectNotification;
+import org.openkilda.messaging.model.SpeakerSwitchView;
 import org.openkilda.wfm.topology.network.storm.bolt.sw.SwitchHandler;
 
-public class SwitchUnmanagedEventCommand extends SwitchCommand {
-    public SwitchUnmanagedEventCommand(SwitchId datapath) {
-        super(datapath);
+public class SwitchConnectCommand extends SwitchAvailabilityCommandBase {
+    private final SpeakerSwitchView speakerData;
+
+    public SwitchConnectCommand(SwitchConnectNotification notification) {
+        super(notification.getSwitchId(), notification.getAvailabilityData());
+        this.speakerData = notification.getSpeakerData();
     }
 
     @Override
     public void apply(SwitchHandler handler) {
-        handler.processSwitchBecomeUnmanaged(getDatapath());
+        handler.processSwitchConnect(getDatapath(), speakerData, availabilityData);
     }
 }

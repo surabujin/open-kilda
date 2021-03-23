@@ -76,14 +76,13 @@ public class NetworkSwitchService {
         controllerExecutor.fire(switchFsm, SwitchFsmEvent.HISTORY, fsmContext);
     }
 
-    // TODO: remove
     public void switchEvent(SwitchInfoData payload) {
         switch (payload.getState()) {
             case ACTIVATED:
                 switchConnect(payload.getSwitchId(), payload.getSwitchView());
                 break;
             case DEACTIVATED:
-                switchDisconnect(payload.getSwitchId());
+                switchDisconnect(payload.getSwitchId(), false);
                 break;
 
             default:
@@ -114,11 +113,22 @@ public class NetworkSwitchService {
         }
     }
 
-    public void switchDisconnect(SwitchId switchId) {
+    public void switchDisconnect(SwitchId switchId, boolean isRegionOffline) {
+        switchDisconnect(switchId, isRegionOffline, null);
+    }
+
+    public void switchDisconnect(SwitchId switchId, boolean isRegionOffline, SwitchAvailabilityData availabilityData) {
         log.info("Switch service receive SWITCH DISCONNECT notification for {}", switchId);
 
         SwitchFsm fsm = locateControllerCreateIfAbsent(switchId);
-        controllerExecutor.fire(fsm, SwitchFsmEvent.OFFLINE, SwitchFsmContext.builder(carrier).build());
+        SwitchFsmContext context = SwitchFsmContext.builder(carrier)
+                .isRegionOffline(isRegionOffline)
+                .build();
+        controllerExecutor.fire(fsm, SwitchFsmEvent.OFFLINE, context);
+    }
+
+    public void switchAvailabilityUpdate(SwitchId switchId, SwitchAvailabilityData availabilityData) {
+        // TODO
     }
 
     /**
@@ -153,18 +163,6 @@ public class NetworkSwitchService {
                 SwitchFsmContext.builder(carrier).syncKey(key);
         SwitchFsm fsm = locateController(switchId);
         controllerExecutor.fire(fsm, SwitchFsmEvent.SYNC_TIMEOUT, fsmContextBuilder.build());
-    }
-
-    /**
-     * Handle switch UNMANAGED notification.
-     */
-    public void switchBecomeUnmanaged(SwitchId datapath) {
-        log.debug("Switch service receive unmanaged notification for {}", datapath);
-        SwitchFsm fsm = locateControllerCreateIfAbsent(datapath);
-        SwitchFsmContext context = SwitchFsmContext.builder(carrier)
-                .isRegionOffline(true)
-                .build();
-        controllerExecutor.fire(fsm, SwitchFsmEvent.OFFLINE, context);
     }
 
     /**

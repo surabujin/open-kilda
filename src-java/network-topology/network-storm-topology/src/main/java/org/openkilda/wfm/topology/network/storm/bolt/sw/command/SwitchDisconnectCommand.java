@@ -15,18 +15,19 @@
 
 package org.openkilda.wfm.topology.network.storm.bolt.sw.command;
 
-import org.openkilda.messaging.info.switches.SwitchAvailabilityUpdateNotification;
-import org.openkilda.messaging.model.SwitchAvailabilityData;
-import org.openkilda.model.SwitchId;
+import org.openkilda.messaging.info.switches.SwitchDisconnectNotification;
 import org.openkilda.wfm.topology.network.storm.bolt.sw.SwitchHandler;
 
-public class SwitchAvailabilityUpdateCommand extends SwitchAvailabilityCommandBase {
-    public SwitchAvailabilityUpdateCommand(SwitchAvailabilityUpdateNotification notification) {
+public class SwitchDisconnectCommand extends SwitchAvailabilityCommandBase {
+    private final boolean isRegionOffline;
+
+    public SwitchDisconnectCommand(SwitchDisconnectNotification notification) {
         super(notification.getSwitchId(), notification.getAvailabilityData());
+        this.isRegionOffline = notification.isRegionOffline();
     }
 
     @Override
     public void apply(SwitchHandler handler) {
-        handler.processSwitchAvailabilityUpdate(getDatapath(), availabilityData);
+        handler.processSwitchDisconnect(getDatapath(), isRegionOffline, availabilityData);
     }
 }

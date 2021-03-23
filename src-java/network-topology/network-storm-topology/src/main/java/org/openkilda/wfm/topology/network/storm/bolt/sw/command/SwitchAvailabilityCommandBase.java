@@ -13,21 +13,16 @@
  *   limitations under the License.
  */
 
-package org.openkilda.messaging.info.switches;
+package org.openkilda.wfm.topology.network.storm.bolt.sw.command;
 
-import org.openkilda.messaging.info.InfoData;
 import org.openkilda.messaging.model.SwitchAvailabilityData;
 import org.openkilda.model.SwitchId;
 
-import lombok.EqualsAndHashCode;
-import lombok.Value;
+public abstract class SwitchAvailabilityCommandBase extends SwitchCommand {
+    protected final SwitchAvailabilityData availabilityData;
 
-@Value
-@EqualsAndHashCode(callSuper = false)
-public class SwitchDisconnectNotification extends InfoData {
-    SwitchId switchId;
-
-    SwitchAvailabilityData availabilityData;
-
-    boolean regionOffline;
+    SwitchAvailabilityCommandBase(SwitchId switchId, SwitchAvailabilityData availabilityData) {
+        super(switchId);
+        this.availabilityData = availabilityData;
+    }
 }

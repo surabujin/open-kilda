@@ -19,6 +19,9 @@ import static org.openkilda.wfm.share.zk.ZooKeeperSpout.FIELD_ID_LIFECYCLE_EVENT
 
 import org.openkilda.bluegreen.LifecycleEvent;
 import org.openkilda.bluegreen.Signal;
+import org.openkilda.messaging.model.SpeakerSwitchView;
+import org.openkilda.messaging.model.SwitchAvailabilityData;
+import org.openkilda.model.SwitchId;
 import org.openkilda.persistence.context.PersistenceContextRequired;
 import org.openkilda.wfm.error.PipelineException;
 import org.openkilda.wfm.share.zk.ZkStreams;
