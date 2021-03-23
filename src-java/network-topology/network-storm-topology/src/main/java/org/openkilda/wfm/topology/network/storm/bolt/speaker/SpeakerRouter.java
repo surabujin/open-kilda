@@ -29,7 +29,11 @@ import org.openkilda.messaging.info.event.IslInfoData;
 import org.openkilda.messaging.info.event.IslRoundTripLatency;
 import org.openkilda.messaging.info.event.PortInfoData;
 import org.openkilda.messaging.info.event.SwitchInfoData;
+import org.openkilda.messaging.info.switches.SwitchAvailabilityUpdateNotification;
+import org.openkilda.messaging.info.switches.SwitchConnectNotification;
+import org.openkilda.messaging.info.switches.SwitchDisconnectNotification;
 import org.openkilda.messaging.info.switches.UnmanagedSwitchNotification;
+import org.openkilda.messaging.model.SwitchAvailabilityData;
 import org.openkilda.messaging.model.system.FeatureTogglesDto;
 import org.openkilda.messaging.nbtopology.request.UpdatePortPropertiesRequest;
 import org.openkilda.wfm.AbstractBolt;
@@ -142,6 +146,12 @@ public class SpeakerRouter extends AbstractBolt {
         } else if (payload instanceof IslRoundTripLatency) {
             emit(STREAM_WATCHER_ID, input, makeWatcherTuple(
                     input, new WatcherSpeakerRoundTripDiscovery((IslRoundTripLatency) payload)));
+        } else if (payload instanceof SwitchConnectNotification) {
+            // TODO
+        } else if (payload instanceof SwitchDisconnectNotification) {
+            // TODO
+        } else if (payload instanceof SwitchAvailabilityUpdateNotification) {
+            // TODO
         } else if (payload instanceof SwitchInfoData) {
             emit(input, makeDefaultTuple(input, new SwitchEventCommand((SwitchInfoData) payload)));
         } else if (payload instanceof PortInfoData) {
