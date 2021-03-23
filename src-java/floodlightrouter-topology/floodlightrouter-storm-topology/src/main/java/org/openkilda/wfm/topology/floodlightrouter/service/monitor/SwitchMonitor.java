@@ -37,7 +37,6 @@ import org.openkilda.wfm.topology.floodlightrouter.service.SwitchMonitorCarrier;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.net.InetSocketAddress;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -52,19 +51,19 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
-public class SwitchMonitorEntry {
+public class SwitchMonitor {
     private final SwitchMonitorCarrier carrier;
     private final Clock clock;
 
     private final SwitchId switchId;
 
-    private final AvailabilityData readWriteConnects = new AvailabilityData(SwitchConnectMode.READ_WRITE);
+    private final ConnectionsCollection readWriteConnects = new ConnectionsCollection(SwitchConnectMode.READ_WRITE);
 
-    private final AvailabilityData readOnlyConnects = new AvailabilityData(SwitchConnectMode.READ_ONLY);
+    private final ConnectionsCollection readOnlyConnects = new ConnectionsCollection(SwitchConnectMode.READ_ONLY);
 
     private Instant lastUpdateTime;
 
-    public SwitchMonitorEntry(SwitchMonitorCarrier carrier, Clock clock, SwitchId switchId) {
+    public SwitchMonitor(SwitchMonitorCarrier carrier, Clock clock, SwitchId switchId) {
         this.carrier = carrier;
         this.clock = clock;
         this.switchId = switchId;
@@ -102,7 +101,7 @@ public class SwitchMonitorEntry {
      * Handle region offline notification.
      */
     public void handleRegionOfflineNotification(String region) {
-        for (AvailabilityData connections : new AvailabilityData[] {readOnlyConnects, readWriteConnects}) {
+        for (ConnectionsCollection connections : new ConnectionsCollection[] {readOnlyConnects, readWriteConnects}) {
             SwitchConnect entry = connections.get(region);
             if (entry != null) {
                 loseRegion(region, entry, connections.getMode());
@@ -125,7 +124,7 @@ public class SwitchMonitorEntry {
         proxyNotificationIfMasterRegion(notification, region);
     }
 
-    private void processConnectNotification(SpeakerSwitchView speakerData, String region, AvailabilityData connects) {
+    private void processConnectNotification(SpeakerSwitchView speakerData, String region, ConnectionsCollection connects) {
         SwitchConnect update = new SwitchConnect(
                 connects.isEmpty(), clock.instant(),
                 speakerData.getSwitchSocketAddress(), speakerData.getSpeakerSocketAddress());
@@ -137,7 +136,7 @@ public class SwitchMonitorEntry {
         }
     }
 
-    private void processDisconnectNotification(SwitchInfoData notification, String region, AvailabilityData connects) {
+    private void processDisconnectNotification(SwitchInfoData notification, String region, ConnectionsCollection connects) {
         SwitchConnect entry = connects.remove(region);
         if (entry == null) {
             log.error(
@@ -316,13 +315,13 @@ public class SwitchMonitorEntry {
                 .collect(Collectors.joining(", ")) + "}";
     }
 
-    private static class AvailabilityData {
+    private static class ConnectionsCollection {
         private final Map<String, SwitchConnect> data = new HashMap<>();
 
         @Getter
         private final SwitchConnectMode mode;
 
-        AvailabilityData(SwitchConnectMode mode) {
+        ConnectionsCollection(SwitchConnectMode mode) {
             this.mode = mode;
         }
 
