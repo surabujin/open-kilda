@@ -21,7 +21,7 @@ import java.net.InetSocketAddress;
 import java.time.Instant;
 
 @Value
-public class SwitchAvailabilityEntry {
+public class SwitchConnect {
     boolean active;
 
     Instant becomeAvailableAt;
@@ -30,10 +30,10 @@ public class SwitchAvailabilityEntry {
 
     InetSocketAddress speakerSocketAddress;
 
-    public SwitchAvailabilityEntry makeActive() {
+    public SwitchConnect makeActive() {
         if (active) {
             return this;
         }
-        return new SwitchAvailabilityEntry(true, becomeAvailableAt, switchSocketAddress, speakerSocketAddress);
+        return new SwitchConnect(true, becomeAvailableAt, switchSocketAddress, speakerSocketAddress);
     }
 }

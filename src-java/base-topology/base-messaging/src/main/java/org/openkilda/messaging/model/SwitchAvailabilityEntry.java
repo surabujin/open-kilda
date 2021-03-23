@@ -18,6 +18,7 @@ package org.openkilda.messaging.model;
 
 import org.openkilda.model.SwitchConnectMode;
 
+import lombok.Builder;
 import lombok.Value;
 
 import java.io.Serializable;
@@ -25,6 +26,7 @@ import java.net.SocketAddress;
 import java.time.Duration;
 
 @Value
+@Builder
 public class SwitchAvailabilityEntry implements Serializable {
     String regionName;
 
