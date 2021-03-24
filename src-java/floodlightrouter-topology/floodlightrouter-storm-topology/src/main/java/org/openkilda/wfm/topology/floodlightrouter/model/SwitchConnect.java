@@ -24,7 +24,7 @@ import java.time.Instant;
 public class SwitchConnect {
     boolean active;
 
-    Instant becomeAvailableAt;
+    Instant connectedAt;
 
     InetSocketAddress switchSocketAddress;
 
@@ -34,6 +34,6 @@ public class SwitchConnect {
         if (active) {
             return this;
         }
-        return new SwitchConnect(true, becomeAvailableAt, switchSocketAddress, speakerSocketAddress);
+        return new SwitchConnect(true, connectedAt, switchSocketAddress, speakerSocketAddress);
     }
 }

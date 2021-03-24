@@ -15,31 +15,14 @@
 
 package org.openkilda.wfm.topology.floodlightrouter.mapper;
 
-import org.openkilda.messaging.model.SwitchAvailabilityEntry;
 import org.openkilda.model.SwitchConnectMode;
 import org.openkilda.wfm.topology.floodlightrouter.model.SwitchConnect;
 
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
 import org.mapstruct.factory.Mappers;
-
-import java.time.Clock;
-import java.time.Duration;
 
 public abstract class SwitchNotificationMapper {
     public static final SwitchNotificationMapper INSTANCE = Mappers.getMapper(SwitchNotificationMapper.class);
 
-    public org.openkilda.messaging.model.SwitchAvailabilityEntry toMessaging(
-            Clock clock, SwitchConnect source, String regionName, SwitchConnectMode connectMode) {
-        SwitchAvailabilityEntry.SwitchAvailabilityEntryBuilder target = SwitchAvailabilityEntry.builder();
-        generatedMap(target, source, regionName, connectMode);
-        target.connectDuration(Duration.between(clock.instant(), source.getBecomeAvailableAt()));
-        return target.build();
-    }
-
-    @Mapping(target = "connectDuration", ignore = true)
-    public abstract void generatedMap(
-            @MappingTarget SwitchAvailabilityEntry.SwitchAvailabilityEntryBuilder target,
-            SwitchConnect source, String regionName,
-            SwitchConnectMode connectMode);
+    public abstract org.openkilda.messaging.model.SwitchAvailabilityEntry toMessaging(
+            SwitchConnect source, String regionName, SwitchConnectMode connectMode);
 }

@@ -263,7 +263,7 @@ public class SwitchMonitor {
     private SwitchConnect mergeAvailabilityEntries(
             SwitchConnect current, SwitchConnect update) {
         return new SwitchConnect(
-                current.isActive() || update.isActive(), current.getBecomeAvailableAt(),
+                current.isActive() || update.isActive(), current.getConnectedAt(),
                 update.getSwitchSocketAddress(), update.getSwitchSocketAddress());
     }
 
@@ -271,12 +271,12 @@ public class SwitchMonitor {
         SwitchAvailabilityData.SwitchAvailabilityDataBuilder builder = SwitchAvailabilityData.builder();
 
         Set<String> readWriteRegions = new HashSet<>();
-        for (SwitchAvailabilityEntry entry : readWriteConnects.dump(clock)) {
+        for (SwitchAvailabilityEntry entry : readWriteConnects.dump()) {
             readWriteRegions.add(entry.getRegionName());
             builder.connection(entry);
         }
 
-        for (SwitchAvailabilityEntry entry : readOnlyConnects.dump(clock)) {
+        for (SwitchAvailabilityEntry entry : readOnlyConnects.dump()) {
             if (readWriteRegions.contains(entry.getRegionName())) {
                 continue;
             }
@@ -356,11 +356,10 @@ public class SwitchMonitor {
             return data.keySet();
         }
 
-        List<SwitchAvailabilityEntry> dump(Clock clock) {
+        List<SwitchAvailabilityEntry> dump() {
             List<SwitchAvailabilityEntry> results = new ArrayList<>();
             for (Map.Entry<String, SwitchConnect> entry : data.entrySet()) {
-                results.add(SwitchNotificationMapper.INSTANCE.toMessaging(
-                        clock, entry.getValue(), entry.getKey(), mode));
+                results.add(SwitchNotificationMapper.INSTANCE.toMessaging(entry.getValue(), entry.getKey(), mode));
             }
             return results;
         }

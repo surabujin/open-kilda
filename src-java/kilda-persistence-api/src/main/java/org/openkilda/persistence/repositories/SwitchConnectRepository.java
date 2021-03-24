@@ -1,5 +1,4 @@
-/*
- * Copyright 2021 Telstra Open Source
+/* Copyright 2021 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -14,28 +13,13 @@
  *   limitations under the License.
  */
 
-package org.openkilda.messaging.model;
+package org.openkilda.persistence.repositories;
 
-import org.openkilda.model.SwitchConnectMode;
+import org.openkilda.model.SwitchConnect;
+import org.openkilda.model.SwitchId;
 
-import lombok.Builder;
-import lombok.Value;
+import java.util.List;
 
-import java.io.Serializable;
-import java.net.InetSocketAddress;
-import java.time.Instant;
-
-@Value
-@Builder
-public class SwitchAvailabilityEntry implements Serializable {
-    String regionName;
-
-    SwitchConnectMode connectMode;
-
-    boolean master;
-
-    Instant connectedAt;
-
-    InetSocketAddress switchAddress;
-    InetSocketAddress speakerAddress;
+public interface SwitchConnectRepository extends Repository<SwitchConnect> {
+    List<SwitchConnect> findBySwitchId(SwitchId switchId);
 }
