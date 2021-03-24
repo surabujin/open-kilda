@@ -24,11 +24,13 @@ import org.openkilda.messaging.info.switches.RulesSyncEntry;
 import org.openkilda.messaging.info.switches.RulesValidationEntry;
 import org.openkilda.messaging.info.switches.SwitchSyncResponse;
 import org.openkilda.messaging.info.switches.SwitchValidationResponse;
+import org.openkilda.messaging.model.SwitchAvailabilityEntry;
 import org.openkilda.messaging.model.SwitchLocation;
 import org.openkilda.messaging.model.SwitchPatch;
 import org.openkilda.messaging.payload.history.PortHistoryPayload;
 import org.openkilda.model.MacAddress;
 import org.openkilda.model.Switch;
+import org.openkilda.model.SwitchConnectMode;
 import org.openkilda.model.SwitchStatus;
 import org.openkilda.northbound.dto.v1.switches.MeterInfoDto;
 import org.openkilda.northbound.dto.v1.switches.MeterMisconfiguredInfoDto;
@@ -44,6 +46,8 @@ import org.openkilda.northbound.dto.v1.switches.SwitchPropertiesDto;
 import org.openkilda.northbound.dto.v1.switches.SwitchSyncResult;
 import org.openkilda.northbound.dto.v1.switches.SwitchValidationResult;
 import org.openkilda.northbound.dto.v2.switches.PortHistoryResponse;
+import org.openkilda.northbound.dto.v2.switches.SwitchConnectEntry;
+import org.openkilda.northbound.dto.v2.switches.SwitchConnectionsResponse;
 import org.openkilda.northbound.dto.v2.switches.SwitchDtoV2;
 import org.openkilda.northbound.dto.v2.switches.SwitchLocationDtoV2;
 import org.openkilda.northbound.dto.v2.switches.SwitchPatchDto;
@@ -51,11 +55,14 @@ import org.openkilda.northbound.dto.v2.switches.SwitchPatchDto;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
+import java.net.InetSocketAddress;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 @Mapper(componentModel = "spring", uses = {FlowMapper.class},
         imports = {Date.class, MacAddress.class, SwitchLocationDto.class, SwitchLocationDtoV2.class})
-public interface SwitchMapper {
+public abstract class SwitchMapper {
 
     @Mapping(source = "ofDescriptionManufacturer", target = "manufacturer")
     @Mapping(source = "ofDescriptionHardware", target = "hardware")
@@ -66,12 +73,12 @@ public interface SwitchMapper {
     @Mapping(source = "socketAddress.port", target = "port")
     @Mapping(target = "location", expression = "java(new SwitchLocationDto("
             + "data.getLatitude(), data.getLongitude(), data.getStreet(), data.getCity(), data.getCountry()))")
-    SwitchDto toSwitchDto(Switch data);
+    public abstract SwitchDto toSwitchDto(Switch data);
 
     /**
      * Convert {@link SwitchStatus} to {@link String} representation.
      */
-    default SwitchChangeType convertStatus(SwitchStatus status) {
+    public SwitchChangeType convertStatus(SwitchStatus status) {
         if (status == null) {
             return null;
         }
@@ -96,9 +103,9 @@ public interface SwitchMapper {
     @Mapping(target = "properRulesHex", ignore = true)
     @Mapping(target = "excessHex", ignore = true)
     @Mapping(target = "installedHex", ignore = true)
-    RulesSyncResult toRulesSyncResult(SwitchSyncResponse response);
+    public abstract RulesSyncResult toRulesSyncResult(SwitchSyncResponse response);
 
-    SwitchSyncResult toSwitchSyncResult(SwitchSyncResponse response);
+    public abstract SwitchSyncResult toSwitchSyncResult(SwitchSyncResponse response);
 
     @Mapping(target = "missingHex", ignore = true)
     @Mapping(target = "misconfiguredHex", ignore = true)
@@ -106,15 +113,15 @@ public interface SwitchMapper {
     @Mapping(target = "excessHex", ignore = true)
     @Mapping(target = "installedHex", ignore = true)
     @Mapping(target = "removedHex", ignore = true)
-    RulesSyncDto toRulesSyncDto(RulesSyncEntry data);
+    public abstract RulesSyncDto toRulesSyncDto(RulesSyncEntry data);
 
-    MetersSyncDto toMetersSyncDto(MetersSyncEntry data);
+    public abstract MetersSyncDto toMetersSyncDto(MetersSyncEntry data);
 
     @Mapping(target = "rules.missingHex", ignore = true)
     @Mapping(target = "rules.misconfiguredHex", ignore = true)
     @Mapping(target = "rules.properHex", ignore = true)
     @Mapping(target = "rules.excessHex", ignore = true)
-    SwitchValidationResult toSwitchValidationResult(SwitchValidationResponse response);
+    public abstract SwitchValidationResult toSwitchValidationResult(SwitchValidationResponse response);
 
     @Mapping(source = "rules.excess", target = "excessRules")
     @Mapping(source = "rules.missing", target = "missingRules")
@@ -122,26 +129,26 @@ public interface SwitchMapper {
     @Mapping(target = "missingRulesHex", ignore = true)
     @Mapping(target = "properRulesHex", ignore = true)
     @Mapping(target = "excessHex", ignore = true)
-    RulesValidationResult toRulesValidationResult(SwitchValidationResponse response);
+    public abstract RulesValidationResult toRulesValidationResult(SwitchValidationResponse response);
 
     @Mapping(target = "missingHex", ignore = true)
     @Mapping(target = "misconfiguredHex", ignore = true)
     @Mapping(target = "properHex", ignore = true)
     @Mapping(target = "excessHex", ignore = true)
-    RulesValidationDto toRulesValidationDto(RulesValidationEntry data);
+    public abstract RulesValidationDto toRulesValidationDto(RulesValidationEntry data);
 
-    MetersValidationDto toMetersValidationDto(MetersValidationEntry data);
+    public abstract MetersValidationDto toMetersValidationDto(MetersValidationEntry data);
 
-    MeterInfoDto toMeterInfoDto(MeterInfoEntry data);
+    public abstract MeterInfoDto toMeterInfoDto(MeterInfoEntry data);
 
-    MeterMisconfiguredInfoDto toMeterMisconfiguredInfoDto(MeterMisconfiguredInfoEntry data);
+    public abstract MeterMisconfiguredInfoDto toMeterMisconfiguredInfoDto(MeterMisconfiguredInfoEntry data);
 
     @Mapping(target = "supportedTransitEncapsulation",
             expression = "java(entry.getSupportedTransitEncapsulation().stream()"
                        + ".map(e -> e.toString().toLowerCase()).collect(java.util.stream.Collectors.toList()))")
     @Mapping(target = "server42MacAddress", expression = "java(entry.getServer42MacAddress() == null ? null "
             + ": entry.getServer42MacAddress().toString())")
-    SwitchPropertiesDto map(org.openkilda.messaging.model.SwitchPropertiesDto entry);
+    public abstract SwitchPropertiesDto map(org.openkilda.messaging.model.SwitchPropertiesDto entry);
 
     @Mapping(target = "supportedTransitEncapsulation",
             expression = "java(entry.getSupportedTransitEncapsulation() == null ? null : "
@@ -150,12 +157,12 @@ public interface SwitchMapper {
                     + ".collect(java.util.stream.Collectors.toSet()))")
     @Mapping(target = "server42MacAddress", expression = "java(entry.getServer42MacAddress() == null ? null "
             + ": new MacAddress(entry.getServer42MacAddress()))")
-    org.openkilda.messaging.model.SwitchPropertiesDto map(SwitchPropertiesDto entry);
+    public abstract org.openkilda.messaging.model.SwitchPropertiesDto map(SwitchPropertiesDto entry);
 
     @Mapping(source = "upEventsCount", target = "upCount")
     @Mapping(source = "downEventsCount", target = "downCount")
     @Mapping(target = "date", expression = "java(Date.from(response.getTime()))")
-    PortHistoryResponse map(PortHistoryPayload response);
+    public abstract PortHistoryResponse map(PortHistoryPayload response);
 
     @Mapping(source = "ofDescriptionManufacturer", target = "manufacturer")
     @Mapping(source = "ofDescriptionHardware", target = "hardware")
@@ -166,9 +173,23 @@ public interface SwitchMapper {
     @Mapping(source = "socketAddress.port", target = "port")
     @Mapping(target = "location", expression = "java(new SwitchLocationDtoV2("
             + "data.getLatitude(), data.getLongitude(), data.getStreet(), data.getCity(), data.getCountry()))")
-    SwitchDtoV2 map(Switch data);
+    public abstract SwitchDtoV2 map(Switch data);
 
-    SwitchPatch map(SwitchPatchDto data);
+    public abstract SwitchPatch map(SwitchPatchDto data);
 
-    SwitchLocation map(SwitchLocationDtoV2 data);
+    public abstract SwitchLocation map(SwitchLocationDtoV2 data);
+
+    @Mapping(target = "state", source = "status")
+    public abstract SwitchConnectionsResponse map(
+            org.openkilda.messaging.nbtopology.response.SwitchConnectionsResponse data);
+
+    public abstract SwitchConnectEntry map(SwitchAvailabilityEntry data);
+
+    public String map(Instant data) {
+        return DateTimeFormatter.ISO_INSTANT.format(data);
+    }
+
+    public String map(InetSocketAddress data) {
+        return data.getAddress().getHostAddress();
+    }
 }

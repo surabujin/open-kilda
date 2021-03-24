@@ -72,7 +72,7 @@ public abstract class PersistenceOperationsBolt extends AbstractBolt {
         }
     }
 
-    abstract List<InfoData> processRequest(Tuple tuple, BaseRequest request);
+    abstract List<? extends InfoData> processRequest(Tuple tuple, BaseRequest request);
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
