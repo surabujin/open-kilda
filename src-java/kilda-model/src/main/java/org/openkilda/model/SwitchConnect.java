@@ -29,10 +29,13 @@ import lombok.Setter;
 import lombok.experimental.Delegate;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.factory.Mappers;
 
 import java.io.Serializable;
 import java.net.InetSocketAddress;
-import java.time.Duration;
 import java.time.Instant;
 
 @DefaultSerializer(BeanSerializer.class)
@@ -154,5 +157,22 @@ public class SwitchConnect implements CompositeDataEntity<SwitchConnect.SwitchCo
         public SwitchId getOwnerSwitchId() {
             return owner.getSwitchId();
         }
+    }
+
+    @Mapper
+    public abstract static class SwitchConnectCloner {
+        public static SwitchConnectCloner INSTANCE = Mappers.getMapper(SwitchConnectCloner.class);
+
+        public SwitchConnectData deepCopy(SwitchConnectData source) {
+            SwitchConnectDataImpl result = new SwitchConnectDataImpl();
+            copyWithoutRelations(source, result);
+            result.setOwner(new Switch(source.getOwner()));
+            result.setSpeaker(new Speaker(source.getSpeaker()));
+            return result;
+        }
+
+        @Mapping(target = "owner", ignore = true)
+        @Mapping(target = "speaker", ignore = true)
+        public abstract void copyWithoutRelations(SwitchConnectData source, @MappingTarget SwitchConnectData target);
     }
 }

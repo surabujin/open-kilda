@@ -28,6 +28,9 @@ import lombok.Setter;
 import lombok.experimental.Delegate;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
+import org.mapstruct.Mapper;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.factory.Mappers;
 
 import java.io.Serializable;
 
@@ -45,6 +48,10 @@ public class Speaker implements CompositeDataEntity<Speaker.SpeakerData> {
 
     public Speaker(@NonNull SpeakerData data) {
         this.data = data;
+    }
+
+    public Speaker(@NonNull Speaker entityToClone) {
+        data = SpeakerCloner.INSTANCE.deepCopy(entityToClone.getData());
     }
 
     @Builder
@@ -88,5 +95,16 @@ public class Speaker implements CompositeDataEntity<Speaker.SpeakerData> {
         private static final long serialVersionUID = 1L;
 
         @NonNull String name;
+    }
+
+    @Mapper
+    public static abstract class SpeakerCloner {
+        public static SpeakerCloner INSTANCE = Mappers.getMapper(SpeakerCloner.class);
+
+        public SpeakerData deepCopy(SpeakerData source) {
+            return copy(source, new SpeakerDataImpl());
+        }
+
+        public abstract SpeakerData copy(SpeakerData source, @MappingTarget SpeakerData target);
     }
 }

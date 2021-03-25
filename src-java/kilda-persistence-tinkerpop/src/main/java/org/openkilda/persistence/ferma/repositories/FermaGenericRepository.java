@@ -15,15 +15,20 @@
 
 package org.openkilda.persistence.ferma.repositories;
 
+import org.openkilda.model.BfdSession;
 import org.openkilda.model.CompositeDataEntity;
 import org.openkilda.persistence.exceptions.PersistenceException;
 import org.openkilda.persistence.ferma.FramedGraphFactory;
+import org.openkilda.persistence.ferma.frames.BfdSessionFrame;
 import org.openkilda.persistence.repositories.Repository;
 import org.openkilda.persistence.tx.TransactionManager;
 
 import com.syncleus.ferma.ElementFrame;
 import com.syncleus.ferma.FramedGraph;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Base repository implementation.
@@ -89,4 +94,15 @@ abstract class FermaGenericRepository<E extends CompositeDataEntity<D>, D, F ext
     }
 
     protected abstract D doDetach(E entity, F frame);
+
+    protected Optional<F> makeOneOrZeroResults(List<? extends F> results) {
+        if (results.size() > 1) {
+            throw new PersistenceException(String.format(
+                    "Expect at most 1 record in response on query in %s, got %d",
+                    getClass().getCanonicalName(), results.size()));
+        }
+        return results.isEmpty()
+                ? Optional.empty()
+                : Optional.of(results.get(0));
+    }
 }

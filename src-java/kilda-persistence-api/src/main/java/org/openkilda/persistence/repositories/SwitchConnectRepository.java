@@ -18,8 +18,10 @@ package org.openkilda.persistence.repositories;
 import org.openkilda.model.SwitchConnect;
 import org.openkilda.model.SwitchId;
 
+import lombok.NonNull;
+
 import java.util.List;
 
 public interface SwitchConnectRepository extends Repository<SwitchConnect> {
-    List<SwitchConnect> findBySwitchId(SwitchId switchId);
+    List<SwitchConnect> findBySwitchId(@NonNull SwitchId switchId);
 }
