@@ -480,7 +480,7 @@ public final class SwitchFsm extends AbstractBaseFsm<SwitchFsm, SwitchFsmState, 
         }
 
         for (SwitchAvailabilityEntry entry : goal) {
-            ConnectReference ref = new ConnectReference(entry.getRegionName(), entry.getConnectMode());
+            ConnectReference ref = new ConnectReference(entry);
             persistSingleSwitchConnect(sw, entry, extra.remove(ref));
         }
 
@@ -581,11 +581,15 @@ public final class SwitchFsm extends AbstractBaseFsm<SwitchFsm, SwitchFsmState, 
                     // extra parameters
                     PersistenceManager.class, SwitchId.class, NetworkOptions.class);
 
+            final String connectionsUpdateMethod = "connectionsUpdate";
+
             // INIT
             builder.transition()
                     .from(SwitchFsmState.INIT).to(SwitchFsmState.OFFLINE).on(SwitchFsmEvent.HISTORY)
                     .callMethod("applyHistory");
             builder.transition().from(SwitchFsmState.INIT).to(SwitchFsmState.SYNC).on(SwitchFsmEvent.ONLINE);
+            builder.internalTransition().within(SwitchFsmState.INIT).on(SwitchFsmEvent.CONNECTIONS_UPDATE)
+                    .callMethod(connectionsUpdateMethod);
 
             // SYNC
             builder.transition().from(SwitchFsmState.SYNC).to(SwitchFsmState.SETUP).on(SwitchFsmEvent.SYNC_ENDED);
@@ -597,7 +601,7 @@ public final class SwitchFsm extends AbstractBaseFsm<SwitchFsm, SwitchFsmState, 
             builder.internalTransition().within(SwitchFsmState.SYNC).on(SwitchFsmEvent.SYNC_TIMEOUT)
                     .callMethod("syncTimeout");
             builder.internalTransition().within(SwitchFsmState.SYNC).on(SwitchFsmEvent.CONNECTIONS_UPDATE)
-                    .callMethod("connectionsUpdate");
+                    .callMethod(connectionsUpdateMethod);
             builder.onEntry(SwitchFsmState.SYNC)
                     .callMethod("syncEnter");
 
@@ -620,7 +624,7 @@ public final class SwitchFsm extends AbstractBaseFsm<SwitchFsm, SwitchFsmState, 
             builder.internalTransition().within(SwitchFsmState.ONLINE).on(SwitchFsmEvent.PORT_DOWN)
                     .callMethod("handlePortLinkStateChange");
             builder.internalTransition().within(SwitchFsmState.ONLINE).on(SwitchFsmEvent.CONNECTIONS_UPDATE)
-                    .callMethod("connectionsUpdate");
+                    .callMethod(connectionsUpdateMethod);
             builder.onEntry(SwitchFsmState.ONLINE)
                     .callMethod("onlineEnter");
 
@@ -630,7 +634,7 @@ public final class SwitchFsm extends AbstractBaseFsm<SwitchFsm, SwitchFsmState, 
                     .on(SwitchFsmEvent.SWITCH_REMOVE)
                     .callMethod("removePortsFsm");
             builder.internalTransition().within(SwitchFsmState.OFFLINE).on(SwitchFsmEvent.CONNECTIONS_UPDATE)
-                    .callMethod("connectionsUpdate");
+                    .callMethod(connectionsUpdateMethod);
             builder.onEntry(SwitchFsmState.OFFLINE)
                     .callMethod("offlineEnter");
 

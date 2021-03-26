@@ -18,11 +18,15 @@ package org.openkilda.wfm.topology.floodlightrouter.mapper;
 import org.openkilda.model.SwitchConnectMode;
 import org.openkilda.wfm.topology.floodlightrouter.model.SwitchConnect;
 
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.factory.Mappers;
 
+@Mapper
 public abstract class SwitchNotificationMapper {
     public static final SwitchNotificationMapper INSTANCE = Mappers.getMapper(SwitchNotificationMapper.class);
 
+    @Mapping(target = "master", source = "source.active")
     public abstract org.openkilda.messaging.model.SwitchAvailabilityEntry toMessaging(
             SwitchConnect source, String regionName, SwitchConnectMode connectMode);
 }

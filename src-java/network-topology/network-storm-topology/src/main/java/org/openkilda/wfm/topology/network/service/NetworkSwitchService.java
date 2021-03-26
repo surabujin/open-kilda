@@ -103,14 +103,11 @@ public class NetworkSwitchService {
         SwitchFsmContext context = SwitchFsmContext
                 .builder(carrier)
                 .speakerData(speakerData)
+                .availabilityData(availabilityData)
                 .build();
 
         SwitchFsm fsm = locateControllerCreateIfAbsent(switchId);
         controllerExecutor.fire(fsm, SwitchFsmEvent.ONLINE, context);
-
-        if (availabilityData != null) {
-            // TODO
-        }
     }
 
     public void switchDisconnect(SwitchId switchId, boolean isRegionOffline) {
@@ -128,7 +125,14 @@ public class NetworkSwitchService {
     }
 
     public void switchAvailabilityUpdate(SwitchId switchId, SwitchAvailabilityData availabilityData) {
-        // TODO
+        log.info("Switch service receive SWITCH availability update notification for {}", switchId);
+
+        SwitchFsmContext context = SwitchFsmContext
+                .builder(carrier)
+                .availabilityData(availabilityData)
+                .build();
+        controllerExecutor.fire(
+                locateControllerCreateIfAbsent(switchId), SwitchFsmEvent.CONNECTIONS_UPDATE, context);
     }
 
     /**

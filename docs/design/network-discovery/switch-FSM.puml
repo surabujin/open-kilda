@@ -31,6 +31,7 @@ endlegend
 
 INIT --> OFFLINE : history / setup port workers
 INIT --> SYNC : online
+INIT : connections-update / save connections in DB
 
 SYNC : enter / init attempts count from config
 SYNC : enter / save speaker data

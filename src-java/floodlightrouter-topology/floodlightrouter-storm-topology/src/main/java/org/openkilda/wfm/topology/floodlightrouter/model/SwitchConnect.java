@@ -26,14 +26,14 @@ public class SwitchConnect {
 
     Instant connectedAt;
 
-    InetSocketAddress switchSocketAddress;
+    InetSocketAddress switchAddress;
 
-    InetSocketAddress speakerSocketAddress;
+    InetSocketAddress speakerAddress;
 
     public SwitchConnect makeActive() {
         if (active) {
             return this;
         }
-        return new SwitchConnect(true, connectedAt, switchSocketAddress, speakerSocketAddress);
+        return new SwitchConnect(true, connectedAt, switchAddress, speakerAddress);
     }
 }
