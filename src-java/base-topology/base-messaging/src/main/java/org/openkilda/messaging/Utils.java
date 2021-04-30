@@ -27,7 +27,8 @@ public final class Utils {
     /**
      * Common object mapper.
      */
-    public static final ObjectMapper MAPPER = new ObjectMapper();
+    public static final ObjectMapper MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule());
     /**
      * The request timestamp attribute.
      */
