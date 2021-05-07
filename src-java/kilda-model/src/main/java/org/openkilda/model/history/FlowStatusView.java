@@ -1,4 +1,4 @@
-/* Copyright 2020 Telstra Open Source
+/* Copyright 2021 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -13,22 +13,15 @@
  *   limitations under the License.
  */
 
-package org.openkilda.persistence;
+package org.openkilda.model.history;
 
-import com.sabre.oss.conf4j.annotation.Configuration;
-import com.sabre.oss.conf4j.annotation.Default;
-import com.sabre.oss.conf4j.annotation.Key;
+import lombok.Value;
 
-import java.io.Serializable;
+import java.time.Instant;
 
-@Configuration
-@Key("persistence")
-public interface PersistenceConfig extends Serializable {
-    @Key("transaction.retries.limit")
-    @Default("5")
-    int getTransactionRetriesLimit();
+@Value
+public class FlowStatusView {
+    Instant timestamp;
 
-    @Key("transaction.retries.maxdelay")
-    @Default("50")
-    int getTransactionRetriesMaxDelay();
+    String statusBecome;
 }

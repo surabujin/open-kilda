@@ -17,10 +17,9 @@ package org.openkilda.persistence.spi;
 
 import org.openkilda.config.provider.ConfigurationProvider;
 import org.openkilda.persistence.NetworkConfig;
-import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.context.PersistenceContextManager;
 import org.openkilda.persistence.inmemory.InMemoryGraphPersistenceManager;
-import org.openkilda.persistence.inmemory.InMemoryGraphTransactionManager;
+import org.openkilda.persistence.inmemory.InMemoryTransactionAdapter;
 
 /**
  * In-memory implementation of the provider for persistence manager(s).
@@ -28,7 +27,7 @@ import org.openkilda.persistence.inmemory.InMemoryGraphTransactionManager;
  */
 public class InMemoryPersistenceProvider implements PersistenceProvider {
     @Override
-    public PersistenceManager getPersistenceManager(ConfigurationProvider configurationProvider) {
+    public InMemoryGraphPersistenceManager getPersistenceManager(ConfigurationProvider configurationProvider) {
         NetworkConfig networkConfig = configurationProvider.getConfiguration(NetworkConfig.class);
         return new InMemoryGraphPersistenceManager(networkConfig);
     }
@@ -36,6 +35,11 @@ public class InMemoryPersistenceProvider implements PersistenceProvider {
     @Override
     public PersistenceContextManager getPersistenceContextManager() {
         return new InMemoryPersistenceContextManager();
+    }
+
+    @Override
+    public String getImplementationName() {
+        return "graph-in-memory";
     }
 
     /**
@@ -57,7 +61,7 @@ public class InMemoryPersistenceProvider implements PersistenceProvider {
 
         @Override
         public boolean isTxOpen() {
-            return InMemoryGraphTransactionManager.isFakedTxOpen();
+            return InMemoryTransactionAdapter.isFakedTxOpen();
         }
     }
 }

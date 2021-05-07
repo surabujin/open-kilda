@@ -15,12 +15,37 @@
 
 package org.openkilda.persistence.tx;
 
+import org.openkilda.persistence.context.PersistenceContextRequired;
+import org.openkilda.persistence.exceptions.PersistenceException;
+import org.openkilda.persistence.exceptions.RecoverablePersistenceException;
+
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import net.jodah.failsafe.Failsafe;
+import net.jodah.failsafe.FailsafeException;
 import net.jodah.failsafe.RetryPolicy;
+
+import java.time.temporal.ChronoUnit;
+import java.util.concurrent.Callable;
 
 /**
  * Manager of transaction boundaries.
  */
-public interface TransactionManager {
+@Slf4j
+public class TransactionManager {
+    private final TransactionAdapterFactory transactionAdapterFactory;
+    private final int transactionRetriesLimit;
+    private final int transactionRetriesMaxDelay;
+
+    public TransactionManager(
+            TransactionAdapterFactory transactionAdapterFactory,
+            int transactionRetriesLimit, int transactionRetriesMaxDelay) {
+        this.transactionAdapterFactory = transactionAdapterFactory;
+        this.transactionRetriesLimit = transactionRetriesLimit;
+        this.transactionRetriesMaxDelay = transactionRetriesMaxDelay;
+    }
+
+
     /**
      * Execute the action specified by the given callback within a transaction.
      * <p/>
@@ -30,9 +55,26 @@ public interface TransactionManager {
      * @param action the transactional action
      * @return a result returned by the callback
      */
-    <T, E extends Throwable> T doInTransaction(TransactionCallback<T, E> action) throws E;
+    @SneakyThrows
+    public <T, E extends Throwable> T doInTransaction(TransactionCallback<T, E> action) throws E {
+        if (isTxOpen()) {
+            return execute(callableOf(action));
+        } else {
+            return execute(getDefaultRetryPolicy(), callableOf(action));
+        }
+    }
 
-    <T, E extends Throwable> T doInTransaction(RetryPolicy<T> retryPolicy, TransactionCallback<T, E> action) throws E;
+    /**
+     * Run lambda inside transaction (retry execution according to settings into retry policy).
+     */
+    @SneakyThrows
+    public <T, E extends Throwable> T doInTransaction(RetryPolicy<T> retryPolicy, TransactionCallback<T, E> action)
+            throws E {
+        if (isTxOpen()) {
+            throw new PersistenceException("Nested transaction mustn't be retryable");
+        }
+        return execute(retryPolicy, callableOf(action));
+    }
 
     /**
      * Execute the action specified by the given callback within a transaction.
@@ -42,12 +84,83 @@ public interface TransactionManager {
      *
      * @param action the transactional action
      */
-    <E extends Throwable> void doInTransaction(TransactionCallbackWithoutResult<E> action) throws E;
+    @SneakyThrows
+    public <E extends Throwable> void doInTransaction(TransactionCallbackWithoutResult<E> action) throws E {
+        if (isTxOpen()) {
+            execute(callableOf(action));
+        } else {
+            execute(getDefaultRetryPolicy(), callableOf(action));
+        }
+    }
 
-    <E extends Throwable> void doInTransaction(RetryPolicy<?> retryPolicy, TransactionCallbackWithoutResult<E> action)
-            throws E;
+    /**
+     * Run lambda inside transaction (retry execution according to settings into retry policy).
+     */
+    @SneakyThrows
+    public <E extends Throwable> void doInTransaction(
+            RetryPolicy<?> retryPolicy, TransactionCallbackWithoutResult<E> action) throws E {
+        if (isTxOpen()) {
+            throw new PersistenceException("Nested transaction mustn't be retryable");
+        }
+        execute(retryPolicy, callableOf(action));
+    }
 
-    <T> RetryPolicy<T> getDefaultRetryPolicy();
+    /**
+     * Create retry policy using knowledge about possible transient exceptions produced by specific persistence layer.
+     */
+    public <T> RetryPolicy<T> getDefaultRetryPolicy() {
+        RetryPolicy<T> retryPolicy = new RetryPolicy<T>()
+                .handle(RecoverablePersistenceException.class)
+                .withMaxRetries(transactionRetriesLimit)
+                .onRetry(e -> log.debug("Failure in transaction. Retrying #{}...", e.getAttemptCount(),
+                        e.getLastFailure()))
+                .onRetriesExceeded(e -> log.error("Failure in transaction. No more retries", e.getFailure()));
+        if (transactionRetriesMaxDelay > 0) {
+            retryPolicy.withBackoff(1, transactionRetriesMaxDelay, ChronoUnit.MILLIS);
+        }
+        return retryPolicy;
+    }
 
-    boolean isTxOpen();
+    public boolean isTxOpen() {
+        return transactionAdapterFactory.produce().isOpen();
+    }
+
+    @SneakyThrows
+    private <T> T execute(RetryPolicy<T> retryPolicy, Callable<T> action) {
+        try {
+            return Failsafe.with(retryPolicy)
+                    .get(() -> execute(action));
+        } catch (FailsafeException ex) {
+            throw ex.getCause();
+        }
+    }
+
+    @PersistenceContextRequired
+    protected <T> T execute(Callable<T> action) throws Exception {
+        TransactionAdapter adapter = transactionAdapterFactory.produce();
+
+        adapter.activate();
+        try {
+            T result = action.call();
+            adapter.markSuccess();
+            return result;
+        } catch (Exception ex) {
+            log.debug("Failed transaction in {} area", adapter.getArea(), ex);
+            adapter.markFail();
+            throw ex;
+        } finally {
+            adapter.close();
+        }
+    }
+
+    private <T, E extends Throwable> Callable<T> callableOf(TransactionCallback<T, E> action) {
+        return action::doInTransaction;
+    }
+
+    private <T, E extends Throwable> Callable<T> callableOf(TransactionCallbackWithoutResult<E> action) {
+        return () -> {
+            action.doInTransaction();
+            return null;
+        };
+    }
 }

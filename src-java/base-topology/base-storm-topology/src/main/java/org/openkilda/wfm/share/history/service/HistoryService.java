@@ -19,12 +19,12 @@ import org.openkilda.model.SwitchId;
 import org.openkilda.model.history.FlowDump;
 import org.openkilda.model.history.FlowEvent;
 import org.openkilda.model.history.FlowHistory;
+import org.openkilda.model.history.FlowStatusView;
 import org.openkilda.model.history.PortHistory;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.RepositoryFactory;
 import org.openkilda.persistence.repositories.history.FlowDumpRepository;
 import org.openkilda.persistence.repositories.history.FlowEventRepository;
-import org.openkilda.persistence.repositories.history.FlowEventRepository.FlowStatusesImmutableView;
 import org.openkilda.persistence.repositories.history.FlowHistoryRepository;
 import org.openkilda.persistence.repositories.history.PortHistoryRepository;
 import org.openkilda.persistence.tx.TransactionManager;
@@ -107,8 +107,8 @@ public class HistoryService {
     /**
      * Fetches flow status timestamps by a flow ID and a time period.
      */
-    public List<FlowStatusesImmutableView>  getFlowStatusTimestamps(String flowId,
-                                                                    Instant timeFrom, Instant timeTo, int maxCount) {
+    public List<FlowStatusView> getFlowStatusTimestamps(String flowId,
+                                                        Instant timeFrom, Instant timeTo, int maxCount) {
         return flowEventRepository.findFlowStatusesByFlowIdAndTimeFrame(flowId, timeFrom, timeTo, maxCount);
     }
 

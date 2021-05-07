@@ -40,6 +40,8 @@ import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.FeatureTogglesRepository;
 import org.openkilda.persistence.repositories.RepositoryFactory;
 import org.openkilda.persistence.repositories.SwitchRepository;
+import org.openkilda.persistence.spi.InMemoryPersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.wfm.share.zk.ZkStreams;
 import org.openkilda.wfm.share.zk.ZooKeeperSpout;
 import org.openkilda.wfm.topology.stats.StatsComponentType;
@@ -49,7 +51,9 @@ import org.apache.storm.task.TopologyContext;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -78,6 +82,16 @@ public class StatsRequesterBoltTest {
     private Tuple input;
     @Mock
     private Tuple startTuple;
+
+    @BeforeClass
+    public static void initPersistenceManager() {
+        PersistenceProviderSupplier.push(new InMemoryPersistenceProvider());
+    }
+
+    @AfterClass
+    public static void resetPersistenceManager() {
+        PersistenceProviderSupplier.clear();
+    }
 
 
     @Before

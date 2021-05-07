@@ -16,6 +16,7 @@
 package org.openkilda.persistence.context;
 
 import org.openkilda.persistence.spi.PersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -28,14 +29,13 @@ import org.aspectj.lang.annotation.Aspect;
 @Aspect
 @Slf4j
 public class PersistenceContextInitializer {
-    private final PersistenceProvider persistenceProvider = PersistenceProvider.getInstance();
-
     /**
      * Wraps annotated method with init/close operations for the persistence context.
      */
     @Around("@annotation(persistenceContextRequired)")
     public Object aroundAdvice(ProceedingJoinPoint joinPoint,
                                PersistenceContextRequired persistenceContextRequired) throws Throwable {
+        PersistenceProvider persistenceProvider = PersistenceProviderSupplier.getActive();
         PersistenceContextManager persistenceContextManager = persistenceProvider.getPersistenceContextManager();
         boolean isNewContext = !persistenceContextManager.isContextInitialized()
                 || persistenceContextRequired.requiresNew();

@@ -68,11 +68,11 @@ import org.openkilda.model.SwitchId;
 import org.openkilda.model.cookie.Cookie;
 import org.openkilda.model.cookie.CookieBase.CookieType;
 import org.openkilda.model.cookie.FlowSegmentCookie;
-import org.openkilda.persistence.NetworkConfig;
 import org.openkilda.persistence.inmemory.InMemoryGraphPersistenceManager;
 import org.openkilda.persistence.repositories.FlowRepository;
 import org.openkilda.persistence.repositories.RepositoryFactory;
 import org.openkilda.persistence.repositories.SwitchRepository;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.wfm.AbstractStormTest;
 import org.openkilda.wfm.LaunchEnvironment;
 import org.openkilda.wfm.config.provider.MultiPrefixConfigurationProvider;
@@ -142,6 +142,7 @@ public class StatsTopologyTest extends AbstractStormTest {
         Properties configOverlay = getZooKeeperProperties(STATS_TOPOLOGY_TEST_ZOOKEEPER_PORT, ROOT_NODE);
         configOverlay.putAll(getKafkaProperties(STATS_TOPOLOGY_TEST_KAFKA_PORT));
         configOverlay.setProperty("opentsdb.metric.prefix", METRIC_PREFIX);
+        configOverlay.setProperty("persistence.implementation", "graph-in-memory");
 
         AbstractStormTest.startZooKafka(configOverlay);
         setStartSignal(STATS_TOPOLOGY_TEST_ZOOKEEPER_PORT, ROOT_NODE, COMPONENT_NAME, RUN_ID);
@@ -150,11 +151,12 @@ public class StatsTopologyTest extends AbstractStormTest {
         LaunchEnvironment launchEnvironment = makeLaunchEnvironment();
         launchEnvironment.setupOverlay(configOverlay);
 
-        MultiPrefixConfigurationProvider configurationProvider = launchEnvironment.getConfigurationProvider();
-        persistenceManager = new InMemoryGraphPersistenceManager(
-                configurationProvider.getConfiguration(NetworkConfig.class));
-
         StatsTopology statsTopology = new StatsTopology(launchEnvironment);
+
+        MultiPrefixConfigurationProvider configurationProvider = launchEnvironment.getConfigurationProvider();
+        persistenceManager = ((InMemoryGraphPersistenceManager) PersistenceProviderSupplier
+                .pull(configurationProvider)
+                .getPersistenceManager(configurationProvider));
         statsTopologyConfig = statsTopology.getConfig();
 
         StormTopology stormTopology = statsTopology.createTopology();
@@ -177,6 +179,7 @@ public class StatsTopologyTest extends AbstractStormTest {
         otsdbConsumer.wakeup();
         otsdbConsumer.join();
 
+        PersistenceProviderSupplier.clear();
         AbstractStormTest.stopZooKafkaAndStorm();
     }
 

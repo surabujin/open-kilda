@@ -21,6 +21,7 @@ import org.openkilda.persistence.ferma.AnnotationFrameFactoryWithConverterSuppor
 import org.openkilda.persistence.ferma.FramedGraphFactory;
 import org.openkilda.persistence.inmemory.repositories.InMemoryRepositoryFactory;
 import org.openkilda.persistence.repositories.RepositoryFactory;
+import org.openkilda.persistence.tx.TransactionArea;
 import org.openkilda.persistence.tx.TransactionManager;
 
 import com.syncleus.ferma.DelegatingFramedGraph;
@@ -45,7 +46,11 @@ public class InMemoryGraphPersistenceManager implements PersistenceManager {
 
     @Override
     public TransactionManager getTransactionManager() {
-        return new InMemoryGraphTransactionManager(getGraphFactory());
+        return getTransactionManager(TransactionArea.FLAT);
+    }
+
+    public TransactionManager getTransactionManager(TransactionArea area) {
+        return new TransactionManager(new InMemoryTransactionAdapterFactory(area), 0, 0);
     }
 
     @Override

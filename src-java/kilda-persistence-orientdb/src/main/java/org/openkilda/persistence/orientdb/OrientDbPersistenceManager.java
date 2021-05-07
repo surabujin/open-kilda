@@ -18,10 +18,14 @@ package org.openkilda.persistence.orientdb;
 import org.openkilda.persistence.NetworkConfig;
 import org.openkilda.persistence.PersistenceConfig;
 import org.openkilda.persistence.PersistenceManager;
+import org.openkilda.persistence.ferma.FramedGraphFactory;
 import org.openkilda.persistence.orientdb.repositories.OrientDbRepositoryFactory;
 import org.openkilda.persistence.repositories.RepositoryFactory;
+import org.openkilda.persistence.tx.DelegateTransactionManagerFactory;
+import org.openkilda.persistence.tx.TransactionArea;
 import org.openkilda.persistence.tx.TransactionManager;
 
+import com.syncleus.ferma.DelegatingFramedGraph;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -29,11 +33,12 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class OrientDbPersistenceManager implements PersistenceManager {
-    private final PersistenceConfig persistenceConfig;
-    private final OrientDbConfig config;
-    private final NetworkConfig networkConfig;
+    protected final PersistenceConfig persistenceConfig;
+    protected final OrientDbConfig config;
+    protected final NetworkConfig networkConfig;
 
     private transient volatile OrientDbGraphFactory graphFactory;
+    private transient volatile TransactionManager transactionManager;
 
     public OrientDbPersistenceManager(PersistenceConfig persistenceConfig,
                                       OrientDbConfig config, NetworkConfig networkConfig) {
@@ -44,16 +49,35 @@ public class OrientDbPersistenceManager implements PersistenceManager {
 
     @Override
     public TransactionManager getTransactionManager() {
-        return new OrientDbTransactionManager(getGraphFactory(), persistenceConfig.getTransactionRetriesLimit(),
-                persistenceConfig.getTransactionRetriesMaxDelay());
+        return getTransactionManager(TransactionArea.FLAT);
+    }
+
+    @Override
+    public TransactionManager getTransactionManager(TransactionArea area) {
+        return lazyCreateTransactionManager();  // ignore area, this is flat DB schema
     }
 
     @Override
     public RepositoryFactory getRepositoryFactory() {
-        return new OrientDbRepositoryFactory(getGraphFactory(), getTransactionManager(), networkConfig);
+        DelegateTransactionManagerFactory transactionManagerFactory = new DelegateTransactionManagerFactory(this);
+        return new OrientDbRepositoryFactory(lazyCreateGraphFactory(), transactionManagerFactory, networkConfig);
     }
 
-    private OrientDbGraphFactory getGraphFactory() {
+    private TransactionManager lazyCreateTransactionManager() {
+        @SuppressWarnings("unchecked")
+        FramedGraphFactory<DelegatingFramedGraph<?>> orientDbFactory = lazyCreateGraphFactory();
+
+        if (transactionManager == null) {
+            synchronized (this) {
+                if (transactionManager == null) {
+                    transactionManager = makeOrientDbTransactionManager(orientDbFactory, TransactionArea.FLAT);
+                }
+            }
+        }
+        return transactionManager;
+    }
+
+    protected OrientDbGraphFactory lazyCreateGraphFactory() {
         if (graphFactory == null) {
             synchronized (this) {
                 if (graphFactory == null) {
@@ -63,5 +87,14 @@ public class OrientDbPersistenceManager implements PersistenceManager {
             }
         }
         return graphFactory;
+    }
+
+    protected TransactionManager makeOrientDbTransactionManager(
+            FramedGraphFactory<DelegatingFramedGraph<?>> orientDbFactory, TransactionArea area) {
+        OrientDbTransactionAdapterFactory adapterFactory = new OrientDbTransactionAdapterFactory(area, orientDbFactory);
+        return new TransactionManager(
+                adapterFactory,
+                persistenceConfig.getTransactionRetriesLimit(),
+                persistenceConfig.getTransactionRetriesMaxDelay());
     }
 }

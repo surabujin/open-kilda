@@ -1,0 +1,19 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Kilda Persistence Hibernate Implemention'
+dependencies {
+    api project(':kilda-persistence-api')
+    api project(':kilda-model')
+    implementation project(':kilda-configuration')
+
+    implementation 'com.google.guava:guava'
+    implementation 'net.jodah:failsafe'
+    implementation group: 'org.hibernate', name: 'hibernate-core', version: '5.4.32.Final'
+    implementation group: 'com.vladmihalcea', name: 'hibernate-types-52', version: '2.11.1'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    annotationProcessor 'org.hibernate:hibernate-jpamodelgen:5.4.32.Final'
+}

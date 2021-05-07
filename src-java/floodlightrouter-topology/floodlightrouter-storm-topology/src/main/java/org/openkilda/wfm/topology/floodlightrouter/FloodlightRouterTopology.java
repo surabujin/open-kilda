@@ -17,7 +17,7 @@ package org.openkilda.wfm.topology.floodlightrouter;
 
 import org.openkilda.config.KafkaTopicsConfig;
 import org.openkilda.persistence.PersistenceManager;
-import org.openkilda.persistence.spi.PersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.wfm.LaunchEnvironment;
 import org.openkilda.wfm.error.ConfigurationException;
 import org.openkilda.wfm.kafka.AbstractMessageSerializer;
@@ -69,7 +69,8 @@ public class FloodlightRouterTopology extends AbstractTopology<FloodlightRouterT
         }
 
         kafkaTopics = topologyConfig.getKafkaTopics();
-        persistenceManager = PersistenceProvider.getInstance().getPersistenceManager(configurationProvider);
+        persistenceManager = PersistenceProviderSupplier
+                .pull(configurationProvider).getPersistenceManager(configurationProvider);
     }
 
     @Override

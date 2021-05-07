@@ -1,0 +1,16 @@
+README.md
+setup.py
+src/kilda/__init__.py
+src/kilda/history_migration/APP_META.json
+src/kilda/history_migration/__init__.py
+src/kilda/history_migration/cli.py
+src/kilda/history_migration/mapper.py
+src/kilda/history_migration/model.py
+src/kilda/history_migration/pull.py
+src/kilda/history_migration/push.py
+src/kilda_history_migration.egg-info/PKG-INFO
+src/kilda_history_migration.egg-info/SOURCES.txt
+src/kilda_history_migration.egg-info/dependency_links.txt
+src/kilda_history_migration.egg-info/entry_points.txt
+src/kilda_history_migration.egg-info/requires.txt
+src/kilda_history_migration.egg-info/top_level.txt

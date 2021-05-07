@@ -45,4 +45,9 @@ public class OrientDbPersistenceProvider implements PersistenceProvider {
     public PersistenceContextManager getPersistenceContextManager() {
         return ThreadLocalPersistenceContextHolder.INSTANCE;
     }
+
+    @Override
+    public String getImplementationName() {
+        return "orientdb";
+    }
 }

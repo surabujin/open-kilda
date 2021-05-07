@@ -1,0 +1,11 @@
+Metadata-Version: 2.1
+Name: kilda-history-migration
+Version: 0.1.dev1
+Summary: Monitors OpenKilda switch connections list to the speakers
+Home-page: UNKNOWN
+License: UNKNOWN
+Description: # Flow history migration tool
+        
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Description-Content-Type: text/markdown

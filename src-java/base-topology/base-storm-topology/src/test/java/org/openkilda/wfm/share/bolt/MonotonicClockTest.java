@@ -21,6 +21,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import org.openkilda.persistence.spi.InMemoryPersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.stubs.ManualClock;
 
 import org.apache.storm.Constants;
@@ -30,6 +32,8 @@ import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.TupleImpl;
 import org.apache.storm.tuple.Values;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -49,6 +53,16 @@ public class MonotonicClockTest {
 
     @Mock
     private TopologyContext topologyContext;
+
+    @BeforeClass
+    public static void initPersistenceManager() {
+        PersistenceProviderSupplier.push(new InMemoryPersistenceProvider());
+    }
+
+    @AfterClass
+    public static void resetPersistenceManager() {
+        PersistenceProviderSupplier.clear();
+    }
 
     @Test
     public void ticks() {

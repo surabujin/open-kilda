@@ -33,10 +33,10 @@ import org.openkilda.model.Isl;
 import org.openkilda.model.IslStatus;
 import org.openkilda.model.Switch;
 import org.openkilda.model.SwitchId;
-import org.openkilda.persistence.NetworkConfig;
 import org.openkilda.persistence.inmemory.InMemoryGraphPersistenceManager;
 import org.openkilda.persistence.repositories.IslRepository;
 import org.openkilda.persistence.repositories.SwitchRepository;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.wfm.AbstractStormTest;
 import org.openkilda.wfm.LaunchEnvironment;
 import org.openkilda.wfm.config.provider.MultiPrefixConfigurationProvider;
@@ -87,6 +87,7 @@ public class IslLatencyTopologyTest extends AbstractStormTest {
         Properties configOverlay = getZooKeeperProperties(ISL_LATENCY_TOPOLOGY_TEST_ZOOKEEPER_PORT, ROOT_NODE);
         configOverlay.putAll(getKafkaProperties(ISL_LATENCY_TOPOLOGY_TEST_KAFKA_PORT));
         configOverlay.setProperty("opentsdb.metric.prefix", METRIC_PREFIX);
+        configOverlay.setProperty("persistence.implementation", "graph-in-memory");
 
         AbstractStormTest.startZooKafka(configOverlay);
         setStartSignal(ISL_LATENCY_TOPOLOGY_TEST_ZOOKEEPER_PORT, ROOT_NODE, COMPONENT_NAME, RUN_ID);
@@ -96,10 +97,11 @@ public class IslLatencyTopologyTest extends AbstractStormTest {
         launchEnvironment.setupOverlay(configOverlay);
         MultiPrefixConfigurationProvider configurationProvider = launchEnvironment.getConfigurationProvider();
 
-        persistenceManager = new InMemoryGraphPersistenceManager(
-                configurationProvider.getConfiguration(NetworkConfig.class));
-
         IslLatencyTopology islLatencyTopology = new IslLatencyTopology(launchEnvironment);
+        persistenceManager = ((InMemoryGraphPersistenceManager) PersistenceProviderSupplier
+                .pull(configurationProvider)
+                .getPersistenceManager(configurationProvider));
+
         islLatencyTopologyConfig = islLatencyTopology.getConfig();
 
         StormTopology stormTopology = islLatencyTopology.createTopology();
@@ -122,6 +124,7 @@ public class IslLatencyTopologyTest extends AbstractStormTest {
         otsdbConsumer.wakeup();
         otsdbConsumer.join();
 
+        PersistenceProviderSupplier.clear();
         AbstractStormTest.stopZooKafkaAndStorm();
     }
 

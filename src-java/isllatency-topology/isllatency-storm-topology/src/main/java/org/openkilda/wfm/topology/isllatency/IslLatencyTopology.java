@@ -16,7 +16,7 @@
 package org.openkilda.wfm.topology.isllatency;
 
 import org.openkilda.persistence.PersistenceManager;
-import org.openkilda.persistence.spi.PersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.wfm.LaunchEnvironment;
 import org.openkilda.wfm.share.zk.ZkStreams;
 import org.openkilda.wfm.share.zk.ZooKeeperBolt;
@@ -71,8 +71,8 @@ public class IslLatencyTopology extends AbstractTopology<IslLatencyTopologyConfi
 
         createIslStatusUpdateBolt(builder);
 
-        PersistenceManager persistenceManager =
-                PersistenceProvider.getInstance().getPersistenceManager(configurationProvider);
+        PersistenceManager persistenceManager = PersistenceProviderSupplier
+                .pull(configurationProvider).getPersistenceManager(configurationProvider);
 
         createCacheBolt(builder, persistenceManager);
         createLatencyBolt(builder, persistenceManager);

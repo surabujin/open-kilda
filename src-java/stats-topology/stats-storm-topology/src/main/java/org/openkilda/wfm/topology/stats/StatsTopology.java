@@ -40,7 +40,7 @@ import static org.openkilda.wfm.topology.stats.bolts.CacheBolt.statsWithCacheFie
 
 import org.openkilda.config.KafkaTopicsConfig;
 import org.openkilda.persistence.PersistenceManager;
-import org.openkilda.persistence.spi.PersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.wfm.LaunchEnvironment;
 import org.openkilda.wfm.share.zk.ZooKeeperBolt;
 import org.openkilda.wfm.share.zk.ZooKeeperSpout;
@@ -112,8 +112,8 @@ public class StatsTopology extends AbstractTopology<StatsTopologyConfig> {
         cacheSyncFilter(builder);
 
         // Cache bolt get data from the database on start
-        PersistenceManager persistenceManager =
-                PersistenceProvider.getInstance().getPersistenceManager(configurationProvider);
+        PersistenceManager persistenceManager = PersistenceProviderSupplier
+                .pull(configurationProvider).getPersistenceManager(configurationProvider);
         declareBolt(builder, new CacheBolt(persistenceManager), STATS_CACHE_BOLT.name())
                 .allGrouping(STATS_CACHE_FILTER_BOLT.name(), CACHE_UPDATE.name())
                 .fieldsGrouping(statsOfsBolt, StatsStreamType.CACHE_DATA.toString(), statsFields);

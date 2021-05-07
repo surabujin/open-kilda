@@ -1,0 +1,3 @@
+[console_scripts]
+kilda-history-migration = kilda.history_migration.cli:main
+

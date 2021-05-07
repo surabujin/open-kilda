@@ -16,7 +16,7 @@
 package org.openkilda.server42.control.topology;
 
 import org.openkilda.persistence.PersistenceManager;
-import org.openkilda.persistence.spi.PersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.server42.control.topology.storm.ComponentId;
 import org.openkilda.server42.control.topology.storm.bolt.TickBolt;
 import org.openkilda.server42.control.topology.storm.bolt.flow.FlowHandler;
@@ -38,7 +38,8 @@ public class ControlTopology extends AbstractTopology<ControlTopologyConfig> {
     public ControlTopology(LaunchEnvironment env) {
         super(env, "control-topology", ControlTopologyConfig.class);
 
-        persistenceManager = PersistenceProvider.getInstance().getPersistenceManager(configurationProvider);
+        persistenceManager = PersistenceProviderSupplier
+                .pull(configurationProvider).getPersistenceManager(configurationProvider);
     }
 
     /**

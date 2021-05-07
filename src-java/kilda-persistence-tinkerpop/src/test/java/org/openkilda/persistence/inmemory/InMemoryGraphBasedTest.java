@@ -20,11 +20,13 @@ import org.openkilda.config.provider.PropertiesBasedConfigurationProvider;
 import org.openkilda.model.Switch;
 import org.openkilda.model.SwitchId;
 import org.openkilda.model.SwitchStatus;
-import org.openkilda.persistence.NetworkConfig;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.RepositoryFactory;
+import org.openkilda.persistence.spi.InMemoryPersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.persistence.tx.TransactionManager;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.mockito.Mockito;
@@ -43,13 +45,20 @@ public abstract class InMemoryGraphBasedTest {
 
     @BeforeClass
     public static void initPersistenceManager() {
+        InMemoryPersistenceProvider provider = new InMemoryPersistenceProvider();
+        PersistenceProviderSupplier.push(provider);
+
         configurationProvider = new PropertiesBasedConfigurationProvider();
-        NetworkConfig networkConfig = configurationProvider.getConfiguration(NetworkConfig.class);
-        inMemoryGraphPersistenceManager = new InMemoryGraphPersistenceManager(networkConfig);
+        inMemoryGraphPersistenceManager = provider.getPersistenceManager(configurationProvider);
         persistenceManager = Mockito.spy(inMemoryGraphPersistenceManager);
         transactionManager = persistenceManager.getTransactionManager();
         repositoryFactory = Mockito.spy(persistenceManager.getRepositoryFactory());
         Mockito.when(persistenceManager.getRepositoryFactory()).thenReturn(repositoryFactory);
+    }
+
+    @AfterClass
+    public static void resetPersistenceManager() {
+        PersistenceProviderSupplier.clear();
     }
 
     @Before

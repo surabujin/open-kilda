@@ -18,7 +18,7 @@ package org.openkilda.testing.service.database;
 import org.openkilda.config.provider.PropertiesBasedConfigurationProvider;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.RepositoryFactory;
-import org.openkilda.persistence.spi.PersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.persistence.tx.TransactionManager;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -42,7 +42,7 @@ public class PersistenceConfig {
         PropertiesBasedConfigurationProvider configurationProvider =
                 new PropertiesBasedConfigurationProvider(configProps);
 
-        return PersistenceProvider.getInstance().getPersistenceManager(configurationProvider);
+        return PersistenceProviderSupplier.pull(configurationProvider).getPersistenceManager(configurationProvider);
     }
 
     @Bean

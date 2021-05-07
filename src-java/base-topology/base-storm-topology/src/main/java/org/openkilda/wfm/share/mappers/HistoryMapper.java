@@ -30,8 +30,8 @@ import org.openkilda.model.cookie.FlowSegmentCookie.FlowSegmentCookieBuilder;
 import org.openkilda.model.history.FlowDump;
 import org.openkilda.model.history.FlowEvent;
 import org.openkilda.model.history.FlowHistory;
+import org.openkilda.model.history.FlowStatusView;
 import org.openkilda.model.history.PortHistory;
-import org.openkilda.persistence.repositories.history.FlowEventRepository.FlowStatusesImmutableView;
 import org.openkilda.wfm.share.flow.resources.FlowResources;
 import org.openkilda.wfm.share.history.model.FlowDumpData;
 import org.openkilda.wfm.share.history.model.FlowDumpData.DumpType;
@@ -152,7 +152,7 @@ public abstract class HistoryMapper {
 
     @Mapping(target = "statusChangeTimestamp", source = "timestamp")
     @Mapping(target = "timestamp", ignore = true)
-    public abstract FlowStatusTimestampsEntry map(FlowStatusesImmutableView flowStatusesImmutableView);
+    public abstract FlowStatusTimestampsEntry map(FlowStatusView flowStatusesImmutableView);
 
     @Mapping(source = "flow.srcSwitch.switchId", target = "sourceSwitch")
     @Mapping(source = "flow.destSwitch.switchId", target = "destinationSwitch")

@@ -1,4 +1,4 @@
-/* Copyright 2020 Telstra Open Source
+/* Copyright 2021 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -18,28 +18,21 @@ package org.openkilda.persistence.orientdb;
 import org.openkilda.persistence.exceptions.ConstraintViolationException;
 import org.openkilda.persistence.exceptions.PersistenceException;
 import org.openkilda.persistence.exceptions.RecoverablePersistenceException;
-import org.openkilda.persistence.ferma.FermaTransactionManager;
-import org.openkilda.persistence.ferma.FramedGraphFactory;
-import org.openkilda.persistence.tx.TransactionManager;
+import org.openkilda.persistence.ferma.FermaTransactionAdapter;
+import org.openkilda.persistence.tx.TransactionArea;
 
 import com.orientechnologies.common.concur.ONeedRetryException;
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.storage.ORecordDuplicatedException;
 import com.syncleus.ferma.DelegatingFramedGraph;
-import lombok.extern.slf4j.Slf4j;
 
-/**
- * OrientDB implementation of {@link TransactionManager}. Manages transaction boundaries.
- */
-@Slf4j
-public class OrientDbTransactionManager extends FermaTransactionManager {
-    public OrientDbTransactionManager(FramedGraphFactory<DelegatingFramedGraph<?>> graphFactory,
-                                      int transactionRetriesLimit, int transactionRetriesMaxDelay) {
-        super(graphFactory, transactionRetriesLimit, transactionRetriesMaxDelay);
+public class OrientDbTransactionAdapter extends FermaTransactionAdapter {
+    public OrientDbTransactionAdapter(TransactionArea area, DelegatingFramedGraph<?> graph) {
+        super(area, graph);
     }
 
     @Override
-    protected Exception wrapPersistenceException(Exception ex) {
+    public Exception wrapException(Exception ex) {
         if (ex instanceof ORecordDuplicatedException) {
             return new ConstraintViolationException("Failure in transaction", ex);
         } else if (ex instanceof ONeedRetryException) {
@@ -47,7 +40,7 @@ public class OrientDbTransactionManager extends FermaTransactionManager {
         } else if (ex instanceof OException) {
             return new PersistenceException("Failure in transaction", ex);
         } else {
-            return super.wrapPersistenceException(ex);
+            return super.wrapException(ex);
         }
     }
 }

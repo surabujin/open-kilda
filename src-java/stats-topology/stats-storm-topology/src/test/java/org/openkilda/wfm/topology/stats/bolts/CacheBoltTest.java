@@ -36,11 +36,15 @@ import org.openkilda.model.cookie.FlowSegmentCookie;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.FlowRepository;
 import org.openkilda.persistence.repositories.RepositoryFactory;
+import org.openkilda.persistence.spi.InMemoryPersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.wfm.topology.stats.CacheFlowEntry;
 import org.openkilda.wfm.topology.stats.MeasurePoint;
 import org.openkilda.wfm.topology.stats.MeterCacheKey;
 
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -75,6 +79,16 @@ public class CacheBoltTest {
     private RepositoryFactory repositoryFactory;
     @Mock
     private FlowRepository flowRepository;
+
+    @BeforeClass
+    public static void initPersistenceManager() {
+        PersistenceProviderSupplier.push(new InMemoryPersistenceProvider());
+    }
+
+    @AfterClass
+    public static void resetPersistenceManager() {
+        PersistenceProviderSupplier.clear();
+    }
 
     @Test
     public void cacheBoltInitCookieTest() {

@@ -16,7 +16,7 @@
 package org.openkilda.wfm.topology.switchmanager;
 
 import org.openkilda.persistence.PersistenceManager;
-import org.openkilda.persistence.spi.PersistenceProvider;
+import org.openkilda.persistence.spi.PersistenceProviderSupplier;
 import org.openkilda.wfm.LaunchEnvironment;
 import org.openkilda.wfm.share.flow.resources.FlowResourcesConfig;
 import org.openkilda.wfm.share.hubandspoke.CoordinatorBolt;
@@ -69,8 +69,8 @@ public class SwitchManagerTopology extends AbstractTopology<SwitchManagerTopolog
                 .allGrouping(CoordinatorSpout.ID)
                 .fieldsGrouping(SwitchManagerHub.ID, CoordinatorBolt.INCOME_STREAM, FIELDS_KEY);
 
-        PersistenceManager persistenceManager =
-                PersistenceProvider.getInstance().getPersistenceManager(configurationProvider);
+        PersistenceManager persistenceManager = PersistenceProviderSupplier
+                .pull(configurationProvider).getPersistenceManager(configurationProvider);
 
         HubBolt.Config hubConfig = HubBolt.Config.builder()
                 .requestSenderComponent(HUB_SPOUT)

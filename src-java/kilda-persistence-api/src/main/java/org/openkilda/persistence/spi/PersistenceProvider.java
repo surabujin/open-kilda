@@ -27,24 +27,6 @@ import java.util.ServiceLoader;
  * @see ServiceLoader
  */
 public interface PersistenceProvider {
-
-    /**
-     * Creates a {@link PersistenceProvider} instance. The provider is loaded using the {@link
-     * ServiceLoader#load(Class)} method.
-     *
-     * @return a {@link PersistenceProvider} implementation.
-     * @see ServiceLoader
-     */
-    static PersistenceProvider getInstance() {
-        ServiceLoader<PersistenceProvider> loader = ServiceLoader.load(PersistenceProvider.class);
-        PersistenceProvider instance = loader.iterator().next();
-        if (instance != null) {
-            return instance;
-        } else {
-            throw new IllegalStateException("No implementation for PersistenceProvider found.");
-        }
-    }
-
     /**
      * Creates a {@link PersistenceManager} for given configuration.
      *
@@ -57,4 +39,6 @@ public interface PersistenceProvider {
      * Obtains a {@link PersistenceContextManager}.
      */
     PersistenceContextManager getPersistenceContextManager();
+
+    String getImplementationName();
 }

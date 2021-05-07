@@ -1,0 +1,4 @@
+pyorient
+click==7.1.2
+ndjson==0.3.1
+mysql-connector-python==8.0.25
